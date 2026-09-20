@@ -735,6 +735,15 @@
   </div>
 </article>
 
+<article class="item" data-keys="goto go to home vault rollups top-level tab switch workspace tab cli agent enh-257">
+  <div class="num">135</div>
+  <div>
+    <h3>Jump to Home, Vault, or Rollups from the CLI</h3>
+    <p class="why">Home, Vault, and Rollups are permanent tabs rather than files, so the usual "open this path" verbs can't reach them. This gives the agent the same one-click jump you have in the tab strip — handy when Claude wants to show you a rollup it just built, or send you back to Home when a task is done. Vault and Rollups only exist once a default vault is set; asking for them before that returns a clear error instead of silently doing nothing.</p>
+    <p class="how"><strong>UI</strong>Click the Home / Vault / Rollups tab. <strong>CLI</strong><code>duo goto home</code>, <code>duo goto vault</code>, <code>duo goto rollups</code> (add <code>--window N</code> to target a specific window).</p>
+  </div>
+</article>
+
 <article class="item" data-keys="home catch-up async command board sessions needs you in progress done briefing card digest todo files artifact pr live closed worktree mode toggle projects re-entry enh-231">
   <div class="num">129</div>
   <div>
@@ -1388,7 +1397,7 @@
 </article>
 
 <footer>
-  <p>This is Duo v0.13.6. Last updated 2026-07-08. <a href="faq.html">FAQ</a> · <a href="https://github.com/dudgeon/duo">Source</a>.</p>
+  <p>This is Duo v0.13.7. Last updated 2026-09-20. <a href="faq.html">FAQ</a> · <a href="https://github.com/dudgeon/duo">Source</a>.</p>
   <p style="margin-top:6px; color: var(--ink-ghost); font-size: 11px;">Find an item that should be here? Tell Claude — the cut-version skill updates this file with each release.</p>
 </footer>
 

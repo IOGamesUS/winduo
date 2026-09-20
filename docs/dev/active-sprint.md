@@ -1,4 +1,4 @@
-# Active sprint state — v0.13.2 shipped (init-on-choose vault + default-vault autocomplete + foreign-vault guard); next: triage
+# Active sprint state — v0.13.7 shipped 2026-09-20 (stuck-UI fixes: BUG-269/270/271/273 + OKF⇄Obsidian links); next: triage
 
 ## BUG-271 — orphaned "Searching vault…" popover at the window's top-left — ✅ shipped 2026-09-18, PR #140 (with BUG-273)
 

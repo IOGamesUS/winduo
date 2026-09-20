@@ -18,6 +18,24 @@
 
 ---
 
+## 2026-09-20 — v0.13.7 CUT — Nothing strands, nothing flickers + OKF links Obsidian can read
+
+Stabilization cut, ten weeks after v0.13.6. Tags the three owner-reported
+"stuck UI" fixes from September — BUG-269 project-rail flicker loop (#138),
+BUG-270 pinned Split View aux (#139), BUG-271 orphaned autocomplete popover
+plus its type-picker sibling BUG-273 (#140) — together with the July work
+that had merged untagged: the OKF ⇄ Obsidian compatibility pass
+(ENH-266a–e, ENH-263), net-zero track-changes composition (ENH-260), and
+`duo goto` + the rollup-rename fix (ENH-257 / BUG-256). **Owner decisions at
+cut time:** cut with the ENH-264 🟡 gate open (override; not Duo-gating), and
+PATCH rather than the MINOR semver suggested. **Owed:** the OS-keystroke
+smoke item for BUG-271/273 and BUG-270's visual item stay on the next owner
+walk. **Filed, not fixed:** BUG-272 (sidecar log noise), BUG-274 (iCloud
+eviction of packfiles + `node_modules` — hit live during this work; this
+worktree ran on a dependency install outside iCloud), BUG-265. 18 closed
+ledger entries moved to `tasks-archive.md`, including older ones whose
+archive-move had been deferred.
+
 ## 2026-07-08 — v0.13.6 CUT — Group by goal, "links to", and a YAML-safe rollup builder
 
 Cut **v0.13.6** — the owner's same-night fleet-machine walk of v0.13.5 exposed four root causes (three symptoms: can't group by goal · a GUI-created rollup fell to view-only · the owned∪monitored target rollup unbuildable), all reproduced against a replica of the real knowledge-base hierarchy, fixed in PR #128:

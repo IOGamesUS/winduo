@@ -19,7 +19,35 @@ notarized distribution (Stage 21).
 
 ## [Unreleased]
 
-> Empty — v0.13.6 cut 2026-07-08.
+> Empty — v0.13.7 cut 2026-09-20.
+
+## [0.13.7] — 2026-09-20 — Nothing strands, nothing flickers — plus OKF links that vanilla Obsidian can read
+
+### Added
+- **`duo goto <home|vault|rollups>` (ENH-257, #124).** Switches a window's top-level tab from the CLI. Those tabs had no CLI path at all; `duo view duo://rollups` silently created a broken tab instead. `vault` / `rollups` return a clear error when no default vault is set.
+- **OKF frontmatter edges are markdown links (ENH-266a/b, #131).** A `[[` pick in an OKF note's frontmatter now writes a quoted markdown link, so vanilla Obsidian resolves it instead of growing an unresolved phantom node. Existing vaults migrate through an opt-in flag; Obsidian-mode vaults are unchanged.
+- **`.obsidian/app.json` seeded for OKF vaults (ENH-263 / ENH-266c, #130).** New OKF vaults open in Obsidian already set to markdown-link mode.
+- **Alias auto-seed (ENH-266e, #132).** OKF stub titles surface in vanilla Obsidian search and the quick switcher.
+- **`duo split-view resize` drives a browser-mode aux too (BUG-270, #139).** It was file-aux-only.
+
+### Changed
+- **Track-changes composition is net-zero (ENH-260, #129).** In Suggesting mode, deleting your own pending insertion removes it outright instead of stacking a deletion mark on top of an insertion mark.
+- **`templates/` is excluded from Bases queries (ENH-266d, #132).** Template notes no longer show up as rows in rollups; `duo base lint` gains the matching check and the vault scaffold ships the exclusion.
+- **Focusing a project with no terminal shows a placeholder (BUG-269, #138)** instead of auto-spawning a terminal on focus.
+
+### Fixed
+- **Orphaned "Searching vault…" box pinned to the window's top-left (BUG-271, #140).** A `[[` or `@` autocomplete left open in a tab that then went inactive never closed, and its popover re-anchored over every other tab. The two suggesters now share one lifecycle that suspends on tab-hide and resumes at the caret on return; the popover also refuses to render against an anchor that isn't laid out.
+- **New-note type picker stranded over other tabs (BUG-273, #140).** Same class of bug on any tab switch that isn't a mouse click — an agent's `duo edit`, the quick switcher. Both hosts (body and frontmatter) now cancel it on tab-hide.
+- **Split View aux width pinned, occluding the editor (BUG-270, #139).** Stale WebContentsView bounds survived a renderer reload; main now re-syncs them when the host renderer reloads.
+- **Project-rail tile click → whole-UI flicker loop (BUG-269, #138).** Two effects fought over the active working tab when it belonged to another project. Activations are adjudicated once instead of on every focus change.
+- **Rollup editor Title field didn't rename the note's file (BUG-256, #124).** It was a silent no-op.
+- **Listing hrefs weren't URL-encoded (#131)** — published OKF listings broke on filenames with spaces or punctuation.
+- **No Metal in Duo-spawned terminals (BUG-212).** The macOS entitlements were missing `com.apple.security.device.gpu`.
+
+### Known issues
+- **BUG-272** — a missing `.duo.json` sidecar logs a main-process error per open editor tab at boot. Harmless, but noisy.
+- **BUG-274** — with the repo under an iCloud-synced `~/Documents`, macOS can evict git packfiles and `node_modules`, hanging commits, tests, and even the running dev app. Developer-only; packaged installs are unaffected.
+- **BUG-265** — quitting one Duo instance can unlink another instance's live socket files.
 
 ## [0.13.6] — 2026-07-08 — Group by goal, "links to", and a YAML-safe rollup builder
 
@@ -2219,7 +2247,8 @@ the agent-driven HTML canvas, and the visual identity.
 - V1–V27 in-app verification walk only partially completed at cut time (V1 PASS, 19c.2 BUG-009 filed); remaining items are owed for v0.2.0 cut.
 - About:blank as the default new-tab landing in the working pane — replaced in v0.2.0 by the `faq.html` / `what-duo-does.html` reference surface.
 
-[Unreleased]: https://github.com/dudgeon/duo/compare/v0.13.6...HEAD
+[Unreleased]: https://github.com/dudgeon/duo/compare/v0.13.7...HEAD
+[0.13.7]: https://github.com/dudgeon/duo/compare/v0.13.6...v0.13.7
 [0.13.6]: https://github.com/dudgeon/duo/compare/v0.13.5...v0.13.6
 [0.13.5]: https://github.com/dudgeon/duo/compare/v0.13.4...v0.13.5
 [0.13.4]: https://github.com/dudgeon/duo/compare/v0.13.3...v0.13.4

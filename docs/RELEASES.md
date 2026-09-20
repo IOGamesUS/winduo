@@ -21,7 +21,19 @@
 
 ## Pending — not yet cut
 
-> *(empty — v0.13.4 cut 2026-07-06)*
+> *(empty — v0.13.7 cut 2026-09-20)*
+
+---
+
+## v0.13.7 — 2026-09-20 — Nothing strands, nothing flickers — plus OKF links that vanilla Obsidian can read
+
+**Why now.** Ten weeks of merged work had piled up behind v0.13.6 without a tag, and the last three PRs closed a chapter: the owner came back to the app in September and hit three "the UI is lying to me" bugs in a row — a project-rail click that sent the whole window into a flicker loop (BUG-269), a Split View whose aux pane sat pinned over the editor and could not be moved (BUG-270), and a dark box reading "Searching vault…" stuck under the traffic lights (BUG-271). All three had the same flavor — state that outlived the thing it belonged to — and with all three fixed the app is trustworthy to walk again. The July work riding along is the OKF ⇄ Obsidian compatibility pass (ENH-266a–e): a live validation in vanilla Obsidian showed Duo's title-based frontmatter wikilinks created unresolved phantom nodes when the on-disk filename was a slug, reversing an earlier decision.
+
+**Key decisions baked in.** (1) *One lifecycle, not two copies.* The `[[` and `@` suggesters each carried a byte-identical popover state machine, which is why the "persistent popover" family had needed the same fix twice, three times over. They now share `suggestionLifecycle.ts`, with a host-driven `suspend()` that is deliberately NOT a dismiss: Escape stays closed for the session, a tab-hide resumes at the caret. (2) *A net under the lifecycle.* `SuggestionPopover` refuses to paint against an anchor with no layout, so any future re-render path fails closed instead of pinning a box to the corner. (3) *Overlays that snapshot their anchor must be told when their tab hides.* The type picker and the frontmatter suggester can't see their own anchor go stale, so their hosts cancel them — with a plain state clear, never the overlay's own cancel handler, which would refocus the hidden tab. (4) *Main re-syncs view bounds on renderer reload* (BUG-270): a WebContentsView's rectangle had exactly one publisher, in the renderer, and a reload destroyed it without running its cleanup. (5) *Adjudicate activations, not focus changes* (BUG-269): the rail's keep-visible effect and the D11 switch were a two-cycle; the gate lets one of them win once. (6) *OKF writes what Obsidian can read* — quoted markdown links in frontmatter, migration opt-in rather than automatic, Obsidian-mode vaults untouched.
+
+**Cut with an open gate — owner override.** ENH-264 (the owner-review playground for the initiative-graph schema) was 🟡 at cut time, which the cut skill treats as a hard block. The owner chose to cut anyway; its own entry marks it as not Duo-gating, and no Duo implementation work is deferred by it. It carries into the next smoke walk. The owner also chose PATCH over the MINOR the semver rule suggested (`duo goto` and the ENH-266 work are new capability) — `package.json` had carried 0.13.7 since the last cut.
+
+**What this is and isn't.** This is a stabilization release: the three owner-reported "stuck UI" bugs, the type-picker sibling found while fixing one of them, and the July compatibility work finally tagged. BUG-271 and BUG-273 were live-verified by driving the real editors through their TipTap instances, not with OS-level keystrokes — that smoke-checklist item stays on the next owner walk, as does BUG-270's visual item. It is NOT a fix for the three issues filed along the way (BUG-272 sidecar log noise, BUG-274 iCloud eviction of packfiles and `node_modules`, BUG-265 cross-instance socket cleanup); those are queued.
 
 ---
 
