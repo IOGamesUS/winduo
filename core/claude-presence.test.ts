@@ -7,7 +7,7 @@
 // hasClaudeDescendant (claude-presence.ts) shells out to `ps` via
 // child_process.spawn; we mock it so the verdict is deterministic. Pure node-env.
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // vi.hoisted so the mock factory (hoisted above imports) can share mutable state
 // with the tests — set h.psTable before driving a probe.
@@ -27,7 +27,11 @@ vi.mock('child_process', async () => {
   }
 })
 
-import { ClaudePresenceProbe } from './claude-presence'
+import { ClaudePresenceProbe, resetProcessTableCache } from './claude-presence'
+
+// Windows support: on Windows the process table is cached for 2 s; each case
+// sets its own canned table, so start every case with the cache empty.
+beforeEach(() => resetProcessTableCache())
 
 // A `ps -ax -o pid,ppid,comm` table where pid 100's tree contains `claude`.
 const HOSTS_CLAUDE = 'PID PPID COMM\n100 1 zsh\n200 100 claude\n'

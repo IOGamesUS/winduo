@@ -33,6 +33,12 @@ const WIN_PS_SCRIPT =
 const WIN_CACHE_MS = 2000
 let winCache: { at: number; out: Promise<string | null> } | null = null
 
+/** Forget the cached Windows process table (tests swap the table between
+ *  cases, and the cache would otherwise serve the previous one). */
+export function resetProcessTableCache(): void {
+  winCache = null
+}
+
 /** `ps -ax -o pid,ppid,comm` output (or the Windows equivalent), or null when
  *  the process table can't be read. Never rejects. */
 export function readProcessTable(platform: NodeJS.Platform = process.platform): Promise<string | null> {
