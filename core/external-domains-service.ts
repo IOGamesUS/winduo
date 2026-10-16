@@ -92,7 +92,7 @@ export class ExternalDomainsService {
   async load(): Promise<void> {
     try {
       const raw = await fsPromises.readFile(this.filePath, 'utf8')
-      const parsed = JSON.parse(raw) as { domains?: Array<string | { host?: string; reason?: string }> }
+      const parsed = JSON.parse(raw) as { domains?: Array<string | { host?: string; reason?: string }>; seenDefaults?: unknown }
       const list = Array.isArray(parsed.domains) ? parsed.domains : []
       this.entries = list
         .map((e): ExternalDomainEntry | null => {
@@ -104,7 +104,9 @@ export class ExternalDomainsService {
       this.loaded = true
 
       // Self-heal: empty array + defaults available → write defaults.
-      if (this.entries.length === 0 && this.defaults.length > 0) {
+      // A file that records seenDefaults is a list the user manages; an
+      // empty one there means "open everything in Duo", not "broken".
+      if (this.entries.length === 0 && this.defaults.length > 0 && !Array.isArray(parsed.seenDefaults)) {
         await this.bootstrapFromDefaults()
       }
     } catch {
@@ -126,7 +128,7 @@ export class ExternalDomainsService {
 
   private async bootstrapFromDefaults(): Promise<void> {
     try {
-      const payload = JSON.stringify({ domains: this.defaults }, null, 2) + '\n'
+      const payload = JSON.stringify({ domains: this.defaults, seenDefaults: this.defaults }, null, 2) + '\n'
       // Ensure the parent dir exists. mkdir is recursive + idempotent.
       const dir = path.dirname(this.filePath)
       await fsPromises.mkdir(dir, { recursive: true })

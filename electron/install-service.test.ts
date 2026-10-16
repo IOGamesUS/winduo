@@ -34,7 +34,8 @@ import {
   managedHookCommand,
   windowsCliLauncher,
   sessionStartHookCommand,
-  bundledCandidates
+  bundledCandidates,
+  planExternalDomainsMerge
 } from './install-service'
 
 describe('composeManagedClaudeMdBlock', () => {
@@ -414,5 +415,30 @@ describe('bundledCandidates (packaged-app resource lookup)', () => {
     const c = bundledCandidates(path.join(app, 'skill', 'references'), app, res, 'dir')
     expect(c[0]).toBe(path.join(res, 'skill', 'references'))
     expect(c).toContain(path.join(res, 'references'))
+  })
+})
+
+describe('planExternalDomainsMerge (external sites list)', () => {
+  const BUNDLED = ['*.slack.com', 'docs.google.com']
+  it('a file without the record gets missing defaults once, then records them', () => {
+    const plan = planExternalDomainsMerge(['*.slack.com'], undefined, BUNDLED)
+    expect(plan.domains).toEqual(['*.slack.com', 'docs.google.com'])
+    expect(plan.seenDefaults.sort()).toEqual([...BUNDLED].sort())
+    expect(plan.changed).toBe(true)
+  })
+  it('a default the user removed is not added back', () => {
+    const plan = planExternalDomainsMerge(['*.slack.com'], BUNDLED, BUNDLED)
+    expect(plan.domains).toEqual(['*.slack.com'])
+    expect(plan.changed).toBe(false)
+  })
+  it('a newly bundled default is added', () => {
+    const plan = planExternalDomainsMerge([], BUNDLED, [...BUNDLED, 'mail.example.com'])
+    expect(plan.domains).toEqual(['mail.example.com'])
+    expect(plan.seenDefaults).toContain('mail.example.com')
+  })
+  it('keeps user entries and their reasons', () => {
+    const mine = { host: 'intranet.local', reason: 'SSO' }
+    const plan = planExternalDomainsMerge([mine], BUNDLED, BUNDLED)
+    expect(plan.domains).toEqual([mine])
   })
 })

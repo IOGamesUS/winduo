@@ -2112,6 +2112,7 @@ function setupIPC(): void {
       return { ok: false, error: `Invalid browser mode: ${String(mode)}` }
     }
     browserManager.setBrowserMode(mode)
+    void rebuildAppMenu() // keep Settings > Browser's checkmark in step
     return { ok: true, mode }
   })
 
@@ -3977,6 +3978,14 @@ function installAppMenu(): void {
         {
           label: 'Default Vault',
           submenu: buildDefaultVaultSubmenu()
+        },
+        // Winduo: the browser's URL filter (ENH-178) from the menu, not only
+        // `duo browser-mode`, plus a way to edit the list of sites that open
+        // in the system browser. `duo browser-mode` / `duo edit <file>` are
+        // the CLI parity.
+        {
+          label: 'Browser',
+          submenu: buildBrowserModeSubmenu()
         }
       ]
     },
@@ -4157,6 +4166,27 @@ function installAppMenu(): void {
 // affects the File > Open Recent submenu (save/open/clear). Cheap
 // enough to do every time — the menu template is rebuilt from scratch
 // on every install too.
+/** Winduo: Settings > Browser. Radio items for the two everyday modes
+ *  (unfiltered stays CLI-only behind --i-understand), and the editable list
+ *  of sites that open in the system browser in "most sites" mode. */
+function buildBrowserModeSubmenu(): Electron.MenuItemConstructorOptions[] {
+  const mode = liveBrowser()?.getBrowserMode() ?? 'local-only'
+  const pick = (next: import('../shared/types').BrowserMode): void => {
+    liveBrowser()?.setBrowserMode(next)
+    pushBrowserMode(next) // renderer persists it and echoes BROWSER_MODE_SET
+    void rebuildAppMenu()
+  }
+  return [
+    { label: 'Open Only Local Files in Duo', type: 'radio', checked: mode === 'local-only', click: () => pick('local-only') },
+    { label: 'Open Most Sites in Duo', type: 'radio', checked: mode !== 'local-only', click: () => pick('filtered') },
+    { type: 'separator' },
+    {
+      label: 'Edit Sites That Open Externally…',
+      click: () => sendEdit(join(homedir(), '.claude', 'duo', 'external-domains.json'))
+    }
+  ]
+}
+
 async function rebuildAppMenu(): Promise<void> {
   await workspaceHistoryService.ensureLoaded()
   installAppMenu()

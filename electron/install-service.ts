@@ -454,6 +454,29 @@ export function bundledCandidates(src: string, appRoot: string, resourcesRoot: s
   return [...new Set(out)]
 }
 
+type DomainEntry = string | { host: string; reason?: string }
+
+/**
+ * Which bundled default domains to add to the user's external-domains list.
+ * The file records `seenDefaults`, every default it has been offered; only
+ * defaults not in that record are added, so a default the user removed is
+ * not put back by the next install. A file without the record (written
+ * before it existed) treats its current hosts as seen, which reproduces the
+ * old additive merge once and then starts recording.
+ */
+export function planExternalDomainsMerge(
+  existing: DomainEntry[],
+  seenDefaults: string[] | undefined,
+  bundled: readonly string[]
+): { domains: DomainEntry[]; seenDefaults: string[]; changed: boolean } {
+  const hosts = new Set(existing.map(e => (typeof e === 'string' ? e : e.host)).filter((h): h is string => typeof h === 'string'))
+  const seen = new Set(seenDefaults ?? [...hosts])
+  const added = bundled.filter(b => !seen.has(b) && !hosts.has(b))
+  const nextSeen = [...new Set([...seen, ...bundled])]
+  const changed = added.length > 0 || seenDefaults === undefined || nextSeen.length !== seen.size
+  return { domains: [...existing, ...added], seenDefaults: nextSeen, changed }
+}
+
 /** Windows support: the duo.cmd launcher. It runs the CLI bundle with Duo's
  *  own Electron binary in Node mode (ELECTRON_RUN_AS_NODE), so `duo` works
  *  without a separate Node install. Rewritten on every launch by
@@ -1938,21 +1961,22 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
         // File exists but parse failed → don't touch.
         return
       } catch {
-        const defaults = { domains: bundled }
+        const defaults = { domains: bundled, seenDefaults: bundled }
         await fs.writeFile(EXTERNAL_DOMAINS_PATH, JSON.stringify(defaults, null, 2) + '\n')
         return
       }
     }
 
-    // Additive merge. Compare by `host` string.
-    const existingHosts = new Set(
-      existing.map(e => (typeof e === 'string' ? e : e.host)).filter((h): h is string => typeof h === 'string')
-    )
-    const missing = bundled.filter(b => !existingHosts.has(b))
-    if (missing.length === 0) return
-
-    const merged = [...existing, ...missing]
-    await fs.writeFile(EXTERNAL_DOMAINS_PATH, JSON.stringify({ domains: merged }, null, 2) + '\n')
+    // Additive merge, but only of defaults this file has never seen, so a
+    // default the user deleted stays deleted (planExternalDomainsMerge).
+    let seen: string[] | undefined
+    try {
+      const parsed = JSON.parse(await fs.readFile(EXTERNAL_DOMAINS_PATH, 'utf8')) as { seenDefaults?: unknown }
+      if (Array.isArray(parsed.seenDefaults)) seen = parsed.seenDefaults.filter((h): h is string => typeof h === 'string')
+    } catch { /* parsed above; unreachable in practice */ }
+    const plan = planExternalDomainsMerge(existing, seen, bundled)
+    if (!plan.changed) return
+    await fs.writeFile(EXTERNAL_DOMAINS_PATH, JSON.stringify({ domains: plan.domains, seenDefaults: plan.seenDefaults }, null, 2) + '\n')
   }
 
   private async safeOverwriteFile(
