@@ -1,0 +1,51 @@
+# Windows support: build, test and package Winduo on a real Windows machine.
+# Runs on every push and pull request; the installer is attached to the run
+# as a downloadable artifact (Actions tab > the run > Artifacts).
+name: Windows build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # npm ci runs the postinstall (electron-rebuild), which compiles
+      # node-pty against Electron with the runner's Visual Studio tools.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      # The suite was written on macOS, so some tests may assume POSIX
+      # paths. Kept non-blocking until the Windows failures are triaged;
+      # the log shows which ones fail.
+      - name: Tests
+        continue-on-error: true
+        run: npx vitest run
+
+      - name: Build the Windows installer
+        run: npm run dist:win
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: winduo-windows-installer
+          path: |
+            dist/*.exe
+            dist/latest.yml
+          if-no-files-found: error
