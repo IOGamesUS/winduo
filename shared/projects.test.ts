@@ -5,7 +5,7 @@
 // `aipm*` project to a duplicative "AI").
 
 import { describe, expect, it } from 'vitest'
-import { splitProjectWords, computeProjectAbbreviations } from './projects'
+import { splitProjectWords, computeProjectAbbreviations, ancestors, deepestEnclosingRoot } from './projects'
 
 // Small helper: build the {root, name} shape from a name list, deriving
 // a unique root per name so callers can read results back by name.
@@ -159,5 +159,25 @@ describe('computeProjectAbbreviations — determinism', () => {
     ]
     const map = computeProjectAbbreviations(projects)
     expect([...map.keys()].sort()).toEqual(['/a', '/b', '/c'])
+  })
+})
+
+// Windows support: the shared path helpers handle drive letters and `\`.
+describe('ancestors / deepestEnclosingRoot with Windows paths', () => {
+  it('walks a Windows path up to its drive root', () => {
+    expect(ancestors('C:\\Users\\ian\\repo\\sub')).toEqual([
+      'C:\\Users\\ian\\repo\\sub',
+      'C:\\Users\\ian\\repo',
+      'C:\\Users\\ian',
+      'C:\\Users',
+      'C:\\'
+    ])
+  })
+  it('still walks POSIX paths to /', () => {
+    expect(ancestors('/a/b')).toEqual(['/a/b', '/a', '/'])
+  })
+  it('finds the deepest enclosing root on Windows', () => {
+    const roots = new Set(['C:\\Users\\ian\\repo', 'C:\\Users\\ian'])
+    expect(deepestEnclosingRoot('C:\\Users\\ian\\repo\\sub\\dir', roots)).toBe('C:\\Users\\ian\\repo')
   })
 })

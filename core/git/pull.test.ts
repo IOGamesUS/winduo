@@ -15,7 +15,9 @@ function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd, stdio: 'pipe' }).toString()
 }
 
-describe('runPull (live git)', () => {
+// Windows support: real git runs much slower on Windows (process start-up),
+// so these live-git cases get a longer timeout than vitest's 5 s default.
+describe('runPull (live git)', { timeout: 30_000 }, () => {
   let origin = ''
   let clone = ''
   let nonRepo = ''

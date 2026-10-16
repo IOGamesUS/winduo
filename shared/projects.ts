@@ -64,18 +64,30 @@ export function isExcludedFromQualification(
 
 // ── path helpers (Posix only — Duo is macOS) ──────────────────────
 
+// Windows support: these helpers run in the renderer too (no Node `path`),
+// so they handle both separators by hand. A Windows drive root (`C:\`) is
+// its own parent, like `/`, so ancestors() stops there.
+const DRIVE_ROOT = /^[A-Za-z]:[\\/]?$/
+
+function lastSep(s: string): number {
+  return Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'))
+}
+
 function dirname(p: string): string {
-  if (p === '/') return '/'
-  const trimmed = p.replace(/\/+$/, '')
-  const idx = trimmed.lastIndexOf('/')
-  if (idx <= 0) return '/'
-  return trimmed.slice(0, idx)
+  if (p === '/' || DRIVE_ROOT.test(p)) return p
+  const trimmed = p.replace(/[\\/]+$/, '')
+  const idx = lastSep(trimmed)
+  if (idx < 0) return '/'
+  const parent = trimmed.slice(0, idx)
+  if (/^[A-Za-z]:$/.test(parent)) return parent + trimmed[idx] // C:\a -> C:\
+  if (idx === 0) return '/'
+  return parent
 }
 
 function basename(p: string): string {
-  if (p === '/') return ''
-  const trimmed = p.replace(/\/+$/, '')
-  const idx = trimmed.lastIndexOf('/')
+  if (p === '/' || DRIVE_ROOT.test(p)) return ''
+  const trimmed = p.replace(/[\\/]+$/, '')
+  const idx = lastSep(trimmed)
   return idx < 0 ? trimmed : trimmed.slice(idx + 1)
 }
 

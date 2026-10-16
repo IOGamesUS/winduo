@@ -132,11 +132,12 @@ function withTimeout<R>(p: Promise<R>, fallback: R, ms = PER_FILE_TIMEOUT_MS): P
   })
 }
 
-// ── path helpers (Posix — Duo is macOS) ─────────────────────────────────
+// ── path helpers (both separators; Windows support) ─────────────────────────────────
 
 function basename(p: string): string {
-  const trimmed = p.replace(/\/+$/, '')
-  const idx = trimmed.lastIndexOf('/')
+  // Windows support: either separator.
+  const trimmed = p.replace(/[\\/]+$/, '')
+  const idx = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
   return idx < 0 ? trimmed : trimmed.slice(idx + 1)
 }
 
@@ -145,8 +146,10 @@ function basename(p: string): string {
  *  child is assumed to be under root (the rollup guarantees it). */
 function subPathOf(root: string, child: string): string | undefined {
   if (child === root) return undefined
-  const r = root.replace(/\/+$/, '')
-  if (child.startsWith(r + '/')) return child.slice(r.length + 1)
+  // Windows support: either separator under the root; the badge is shown
+  // with `/` on every platform (it's a label, never used to build a path).
+  const r = root.replace(/[\\/]+$/, '')
+  if (child.startsWith(r + '/') || child.startsWith(r + '\\')) return child.slice(r.length + 1).replace(/\\/g, '/')
   return undefined
 }
 
