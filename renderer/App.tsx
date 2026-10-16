@@ -452,7 +452,7 @@ export function App() {
   useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
 
   const [splitPct, setSplitPct] = useState(55)
-  // Winduo — 'stacked' puts the editor/browser pane above the terminal.
+  // Winduo: 'stacked' puts the editor/browser pane above the terminal.
   // splitPct keeps its meaning (the terminal's share) in both layouts.
   const { paneLayout } = usePaneLayout()
   const stacked = paneLayout === 'stacked'
@@ -5234,7 +5234,7 @@ export function App() {
               isCanvasCollapsed ? 'flex-1' : ''
             ].join(' ')}
             style={{
-              // Winduo — stacked: the terminal is the bottom pane (order 3)
+              // Winduo: stacked: the terminal is the bottom pane (order 3)
               // and splitPct is its height instead of its width.
               ...(stacked ? { order: 3 } : {}),
               ...(isTerminalCollapsed
@@ -5407,7 +5407,7 @@ export function App() {
               focusedColumn === 'working' ? 'border-accent' : 'border-transparent'
             ].join(' ')}
             style={{
-              // Winduo — stacked: the editor/browser pane is on top (order 1).
+              // Winduo: stacked: the editor/browser pane is on top (order 1).
               ...(stacked ? { order: 1 } : {}),
               ...(isCanvasCollapsed ? { [stacked ? 'height' : 'width']: '36px' } : {})
             }}

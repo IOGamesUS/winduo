@@ -343,7 +343,7 @@ html.dark {
     width: 12px;
     transform: translateX(-50%);
   }
-  /* Winduo — the divider between stacked panes (editor above terminal). */
+  /* Winduo: the divider between stacked panes (editor above terminal). */
   .split-divider.split-divider-h {
     @apply w-auto h-px cursor-row-resize;
   }

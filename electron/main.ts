@@ -3994,7 +3994,7 @@ function installAppMenu(): void {
     {
       label: 'View',
       submenu: [
-        // Winduo — stacked layout (editor/browser above the terminal, as in
+        // Winduo: stacked layout (editor/browser above the terminal, as in
         // VS Code). `duo pane-layout side|stacked|toggle` is the CLI parity.
         {
           label: 'Stack Editor Above Terminal',
@@ -5584,7 +5584,7 @@ export function setAuthor(author: string): { ok: boolean; error?: string } {
 // land here. Renderer clamps to the divider drag's 20–80 range; the
 // validator below mirrors that so an invalid CLI value errors at the
 // socket boundary instead of a silent clamp.
-// Winduo — pane layout per window. The renderer owns and persists it
+// Winduo: pane layout per window. The renderer owns and persists it
 // (localStorage) and reports it here on boot and on every change.
 const paneLayoutByWindow = new Map<number, import('../shared/types').PaneLayout>()
 

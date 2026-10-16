@@ -145,7 +145,7 @@ export interface NavBridge {
   /** ENH-099 — `duo split 3way` / `⌘⌥4` chord. Snaps to outer 33/67 +
    *  inner aux 50/50 (when aux is open). On-demand sibling of ENH-126. */
   setLayout3wayEven: () => { ok: boolean; error?: string }
-  /** Winduo — pane layout: read, or set side | stacked | toggle. */
+  /** Winduo: pane layout: read, or set side | stacked | toggle. */
   getPaneLayout?: () => import('../shared/types').PaneLayout
   setPaneLayout?: (mode: import('../shared/types').PaneLayout | 'toggle') => { ok: boolean; mode?: import('../shared/types').PaneLayout; error?: string }
   /** FOLLOWUP-020 — close the focused working-pane tab. Mirrors ⌘W
@@ -1782,7 +1782,7 @@ export class SocketServer {
           break
         }
         case 'pane-layout': {
-          // Winduo — `duo pane-layout [side|stacked|toggle]`. Bare reads.
+          // Winduo: `duo pane-layout [side|stacked|toggle]`. Bare reads.
           const mode = args['mode'] as string | undefined
           if (mode === undefined) {
             result = { mode: this.nav.getPaneLayout?.() ?? 'side' }

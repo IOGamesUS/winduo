@@ -49,7 +49,7 @@ export interface DuoResponse {
   error?: string
 }
 
-/** Winduo — how the terminal and the editor/browser pane share the window. */
+/** Winduo: how the terminal and the editor/browser pane share the window. */
 export type PaneLayout = 'side' | 'stacked'
 
 export type DuoCommandName =
@@ -2621,7 +2621,7 @@ export const IPC = {
   // applies the inner aux split only if aux is currently open; outer
   // gets the 33/67 either way.
   LAYOUT_3WAY_EVEN: 'layout:3way-even',
-  // Winduo — pane layout: side by side (terminal | editor) or stacked
+  // Winduo: pane layout: side by side (terminal | editor) or stacked
   // (editor above terminal). SET is main → renderer; STATE is renderer →
   // main so the View menu checkbox and `duo pane-layout` can read it.
   PANE_LAYOUT_SET: 'pane-layout:set',

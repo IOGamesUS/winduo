@@ -1608,7 +1608,7 @@ async function main(): Promise<void> {
         die(`Unknown split-view sub-verb: ${sub}. Expected: open|open-browser|close|promote|resize|state`)
       }
       case 'pane-layout': {
-        // Winduo — side by side or stacked (editor above terminal).
+        // Winduo: side by side or stacked (editor above terminal).
         const mode = rest[0]
         if (mode !== undefined && mode !== 'side' && mode !== 'stacked' && mode !== 'toggle') {
           die('Usage: duo pane-layout [side|stacked|toggle]')

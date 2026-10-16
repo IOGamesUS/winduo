@@ -750,7 +750,7 @@ const api: ElectronAPI = {
       ipcRenderer.on(IPC.LAYOUT_3WAY_EVEN, handler)
       return () => ipcRenderer.removeListener(IPC.LAYOUT_3WAY_EVEN, handler)
     },
-    // Winduo — pane layout (side by side or stacked).
+    // Winduo: pane layout (side by side or stacked).
     onPaneLayoutSet: (cb) => {
       const handler = (_: IpcRendererEvent, mode: import('../shared/types').PaneLayout) => cb(mode)
       ipcRenderer.on(IPC.PANE_LAYOUT_SET, handler)
