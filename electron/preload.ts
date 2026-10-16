@@ -82,10 +82,13 @@ const WINDOW_ID: number = (() => {
 })()
 const api: ElectronAPI = {
   env: {
-    HOME: process.env.HOME ?? '',
-    SHELL: process.env.SHELL ?? '/bin/zsh',
+    // Windows support: HOME and USER are usually unset there; USERPROFILE
+    // and USERNAME hold the same values.
+    HOME: process.env.HOME ?? process.env.USERPROFILE ?? '',
+    SHELL: process.env.SHELL ?? (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh'),
     // BUG-138 Phase 2 — default human author identity for CriticMarkup.
-    USER: process.env.USER ?? '',
+    USER: process.env.USER ?? process.env.USERNAME ?? '',
+    platform: process.platform,
     appVersion: APP_VERSION,
     isDev: IS_DEV,
     windowId: WINDOW_ID,

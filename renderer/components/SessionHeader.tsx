@@ -23,6 +23,7 @@
 // `renderer/store/sessionHeader.ts` as in-memory only. Nothing
 // persists to disk; restart wipes dismissal + pill visibility state.
 
+import { shellEnter } from '../../shared/shell-enter'
 import { useState, useSyncExternalStore, useEffect, useMemo, useRef } from 'react'
 import type { ClaudePresenceState, BannerTitleResult, PriorSessionListing } from '@shared/host-api'
 import {
@@ -161,7 +162,7 @@ export function SessionHeader({
       <SessionPillsList
         sessions={priorSessions}
         onPickSession={(uuid) => {
-          void window.electron.pty.write(tabId, `claude --resume ${uuid}\n`)
+          void window.electron.pty.write(tabId, `claude --resume ${uuid}${shellEnter(window.electron.env.platform)}`)
           setSessionHeaderState(tabId, { pillsVisible: false })
         }}
         onDismiss={() => setSessionHeaderState(tabId, { pillsVisible: false })}

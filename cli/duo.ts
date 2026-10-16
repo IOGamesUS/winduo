@@ -20,6 +20,7 @@ import type { DuoRequest, DuoResponse } from '../shared/types'
 // read the vault — PRD Phase 4). Only `base render --open` / `vault
 // capture --open` reach the app (to surface a tab), and only when asked.
 import * as vault from '../core/vault'
+import { duoDataDir } from '../core/platform'
 import { listWorktrees, createWorktree, removeWorktree } from '../core/git/worktree'
 import { runPull } from '../core/git/pull'
 
@@ -596,14 +597,14 @@ const VERBS: VerbSpec[] = [
 // path changes flow through one knob.
 const SOCKET_PATH =
   process.env.DUO_SOCKET ??
-  path.join(os.homedir(), 'Library', 'Application Support', 'duo', 'duo.sock')
+  path.join(duoDataDir(), 'duo.sock')
 // Stage 20 — TCP fallback published by the Electron app at startup.
 // Format: { port: number, token: string }. Read by `send()` when the
 // Unix socket fails to connect (sandboxed Claude Code). See
 // docs/DECISIONS.md → *Sandbox-tolerant transport*.
 const PORT_FILE =
   process.env.DUO_PORT_FILE ??
-  path.join(os.homedir(), 'Library', 'Application Support', 'duo', 'duo.port')
+  path.join(duoDataDir(), 'duo.port')
 
 // ENH-191 P5a (Tier-3/S4) — terminal-origin window addressing. DUO_WINDOW is
 // the PTY env-stamp (core/pty-manager.ts) = the owning window's id; an explicit

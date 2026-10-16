@@ -11,6 +11,7 @@ import os from 'os'
 import {
   buildResumeCommand,
   encodeProjectDir,
+  encodeResolvedPath,
   cleanAndTruncate,
   readBannerTitle,
   readMessageCount,
@@ -86,6 +87,23 @@ describe('encodeProjectDir — ENH-177', () => {
     // the BUG-158 fix for non-existent paths).
     expect(encodeProjectDir('/this/path/does/not/exist/abc123'))
       .toBe('-this-path-does-not-exist-abc123')
+  })
+})
+
+describe('encodeResolvedPath (Windows and the full rule)', () => {
+  it('maps a Windows path the way Claude Code does', () => {
+    expect(encodeResolvedPath('C:\\Users\\ian\\proj')).toBe('C--Users-ian-proj')
+  })
+
+  it('maps spaces, underscores and non-ASCII letters to dashes', () => {
+    expect(encodeResolvedPath('/Users/ian/My Docs/snake_case/caf\u00e9')).toBe('-Users-ian-My-Docs-snake-case-caf-')
+  })
+
+  it('truncates long paths to 200 characters plus a hash', () => {
+    const p = 'C:\\Users\\ian\\' + 'very-long-folder-name\\'.repeat(12) + 'proj'
+    const out = encodeResolvedPath(p)
+    expect(out.length).toBe(207)
+    expect(out.endsWith('-sifbqs')).toBe(true)
   })
 })
 

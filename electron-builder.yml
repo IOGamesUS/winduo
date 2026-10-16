@@ -142,6 +142,23 @@ mac:
   # Click "Always Allow" or the build hangs forever. Once per session.
   # ============================================================================
 
+# Windows support: a per-user NSIS installer (no admin rights needed),
+# x64 for now. electron-builder makes the .ico from build/icon.png.
+# electron-updater reads the `latest.yml` this target publishes beside the
+# installer. Unsigned until a code-signing certificate is set up, so
+# SmartScreen warns on first run.
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
 dmg:
   title: "${productName} ${version}"
   # Stage 21: DMG-container signing. Keep at false for now — the .app

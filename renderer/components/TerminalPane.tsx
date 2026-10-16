@@ -7,6 +7,7 @@ import type { TabSession } from '@shared/types'
 import { matchGlobalShortcut } from '../keyboard/globalShortcuts'
 import { useClaudeKeyPrefs } from '../hooks/useClaudeKeyPrefs'
 import { useClaudePresence } from '../hooks/useClaudePresence'
+import { shellEnter } from '../../shared/shell-enter'
 
 // scrollback defined here; shared/constants.ts uses Node.js os/path and can't be imported in renderer
 const SCROLLBACK = 10_000
@@ -205,7 +206,7 @@ export function TerminalPane({
           cwd={activeTab.cwd}
           claudePresence={claudePresence}
           onResume={(sessionId) => {
-            void window.electron.pty.write(activeTab.id, `claude --resume ${sessionId}\n`)
+            void window.electron.pty.write(activeTab.id, `claude --resume ${sessionId}${shellEnter(window.electron.env.platform)}`)
           }}
         />
       )}

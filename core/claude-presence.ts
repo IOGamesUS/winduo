@@ -23,6 +23,46 @@
 
 import { spawn } from 'child_process'
 
+// Windows support: the process table comes from PowerShell's Win32_Process
+// there (no `ps`), printed in the same `PID PPID COMM` shape so one parser
+// serves both. A CIM query costs a few hundred ms, so the Windows answer is
+// reused for 2 s across the several probes a Home refresh makes.
+const WIN_PS_SCRIPT =
+  "$ErrorActionPreference='Stop'; 'PID PPID COMM'; " +
+  "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, $_.Name }"
+const WIN_CACHE_MS = 2000
+let winCache: { at: number; out: Promise<string | null> } | null = null
+
+/** `ps -ax -o pid,ppid,comm` output (or the Windows equivalent), or null when
+ *  the process table can't be read. Never rejects. */
+export function readProcessTable(platform: NodeJS.Platform = process.platform): Promise<string | null> {
+  if (platform === 'win32') {
+    const now = Date.now()
+    if (winCache && now - winCache.at < WIN_CACHE_MS) return winCache.out
+    const out = runForStdout('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WIN_PS_SCRIPT])
+    winCache = { at: now, out }
+    return out
+  }
+  return runForStdout('ps', ['-ax', '-o', 'pid,ppid,comm'])
+}
+
+function runForStdout(cmd: string, args: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
+    let stdout = ''
+    child.stdout.on('data', (chunk) => { stdout += chunk.toString() })
+    child.on('error', () => resolve(null))
+    child.on('close', () => resolve(stdout))
+  })
+}
+
+/** Whether a process-table command name is Claude Code: basename `claude`
+ *  on macOS and Linux, `claude.exe` on Windows (either slash, any case). */
+export function isClaudeComm(comm: string): boolean {
+  const base = (comm.split(/[\\/]/).pop() ?? comm).toLowerCase()
+  return base === 'claude' || base === 'claude.exe'
+}
+
 export type ClaudePresenceState = 'no-pty' | 'shell' | 'claude' | 'starting'
 
 const POLL_INTERVAL_MS = 500
@@ -140,11 +180,8 @@ export class ClaudePresenceProbe {
  */
 function hasClaudeDescendant(rootPid: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn('ps', ['-ax', '-o', 'pid,ppid,comm'], { stdio: ['ignore', 'pipe', 'ignore'] })
-    let stdout = ''
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString() })
-    child.on('error', () => resolve(false))
-    child.on('close', () => {
+    void readProcessTable().then((stdout) => {
+      if (stdout === null) { resolve(false); return }
       const byParent = parsePsByParent(stdout)
       resolve(treeHasClaude(byParent, rootPid))
     })
@@ -189,8 +226,7 @@ function treeHasClaude(
     const children = byParent.get(cur)
     if (!children) continue
     for (const c of children) {
-      const basename = c.comm.split('/').pop() ?? c.comm
-      if (basename === 'claude') return true
+      if (isClaudeComm(c.comm)) return true
       queue.push(c.pid)
     }
   }
@@ -245,11 +281,8 @@ export function probeAllTabs(rootPids: number[]): Promise<ProbeAllTabsResult> {
     unattributedClaudePids: []
   }
   return new Promise((resolve) => {
-    const child = spawn('ps', ['-ax', '-o', 'pid,ppid,comm'], { stdio: ['ignore', 'pipe', 'ignore'] })
-    let stdout = ''
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString() })
-    child.on('error', () => resolve(empty))
-    child.on('close', () => {
+    void readProcessTable().then((stdout) => {
+      if (stdout === null) { resolve(empty); return }
       const byParent = parsePsByParent(stdout)
 
       // Per-root verdict + the union of all roots' descendant pids (so we
@@ -267,8 +300,7 @@ export function probeAllTabs(rootPids: number[]): Promise<ProbeAllTabsResult> {
       const unattributedClaudePids: number[] = []
       for (const children of byParent.values()) {
         for (const c of children) {
-          const basename = c.comm.split('/').pop() ?? c.comm
-          if (basename === 'claude' && !ownedPids.has(c.pid)) {
+          if (isClaudeComm(c.comm) && !ownedPids.has(c.pid)) {
             unattributedClaudePids.push(c.pid)
           }
         }
@@ -303,11 +335,8 @@ export interface LiveClaudeProc {
 export function mapLiveClaudeOwners(duoPtyPids: number[]): Promise<LiveClaudeProc[]> {
   const duoSet = new Set(duoPtyPids)
   return new Promise((resolve) => {
-    const child = spawn('ps', ['-ax', '-o', 'pid,ppid,comm'], { stdio: ['ignore', 'pipe', 'ignore'] })
-    let stdout = ''
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString() })
-    child.on('error', () => resolve([]))
-    child.on('close', () => {
+    void readProcessTable().then((stdout) => {
+      if (stdout === null) { resolve([]); return }
       const byParent = parsePsByParent(stdout)
       // child → parent index for the upward walk.
       const parentOf = new Map<number, number>()
@@ -316,8 +345,7 @@ export function mapLiveClaudeOwners(duoPtyPids: number[]): Promise<LiveClaudePro
       const out: LiveClaudeProc[] = []
       for (const kids of byParent.values()) {
         for (const k of kids) {
-          const basename = k.comm.split('/').pop() ?? k.comm
-          if (basename !== 'claude') continue
+          if (!isClaudeComm(k.comm)) continue
           // walk up the ancestry; first Duo PTY pid hit owns this claude.
           let cur: number | undefined = k.pid
           const seen = new Set<number>()

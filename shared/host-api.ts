@@ -43,6 +43,9 @@ export interface ElectronEnv {
   /** OS username — used as the default human author identity when
    *  localStorage('duo:author') hasn't been set yet (BUG-138 Phase 2). */
   USER: string
+  /** Windows support: Node's process.platform ('darwin', 'win32', ...).
+   *  Optional so renderer test mocks don't need to set it. */
+  platform?: string
   /** Duo's package.json `version` field, populated at preload time
    *  via `app.getVersion()`. Surfaces in the titlebar so the user
    *  can confirm which build is running before a smoke walk. */

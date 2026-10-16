@@ -43,10 +43,14 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import * as fs from 'fs'
 import * as path from 'path'
+import { homedir } from 'os'
+import { pathDelimiter } from './platform'
 
 const execFileAsync = promisify(execFile)
 
-const HOME = process.env.HOME ?? ''
+// Windows support: HOME is usually unset there (USERPROFILE is), so fall
+// back to os.homedir().
+const HOME = process.env.HOME ?? homedir()
 const SHIM_DIR = path.join(HOME, '.claude', 'duo', 'bin')
 
 // BUG-035 — well-known install locations, ordered by frequency. We stat
@@ -73,6 +77,7 @@ const WELL_KNOWN_DIRS = [
  *   wrapper). Used by installShim() to prevent infinite loops.
  */
 export async function resolveClaudeBinary(opts: { excludeShimDir?: boolean } = {}): Promise<string | null> {
+  if (process.platform === 'win32') return resolveOnWindows()
   // 1. Fast paths first — well-known absolute locations + process.env.PATH.
   const fastHit = await resolveFastPath(opts.excludeShimDir ?? false)
   if (fastHit) return fastHit
@@ -88,7 +93,7 @@ export async function resolveClaudeBinary(opts: { excludeShimDir?: boolean } = {
  * fallback on populated rc files.
  */
 async function resolveFastPath(excludeShimDir: boolean): Promise<string | null> {
-  const pathDirs = (process.env.PATH || '').split(':').filter(Boolean)
+  const pathDirs = (process.env.PATH || '').split(pathDelimiter()).filter(Boolean)
   const candidates = [...WELL_KNOWN_DIRS, ...pathDirs]
   const seen = new Set<string>()
   for (const dir of candidates) {
@@ -169,4 +174,50 @@ function pathWithoutShim(): string {
     }
   })
   return segments.join(':')
+}
+
+// Windows support. GUI apps on Windows inherit the user's real PATH (there
+// is no LaunchServices PATH problem), so the walk is the well-known install
+// folders plus PATH, then `where.exe`. No shim to exclude: the shell-script
+// shim isn't installed on Windows.
+
+/** Where Claude Code's installers put `claude` on Windows, most common first:
+ *  the native installer (%USERPROFILE%\.local\bin), npm's global folder,
+ *  and WinGet's links folder. */
+export function windowsClaudeDirs(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string[] {
+  const dirs = [path.win32.join(home, '.local', 'bin')]
+  if (env.APPDATA) dirs.push(path.win32.join(env.APPDATA, 'npm'))
+  if (env.LOCALAPPDATA) dirs.push(path.win32.join(env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links'))
+  return dirs
+}
+
+/** The file names `claude` can have on Windows. The native installer ships
+ *  claude.exe; npm installs a claude.cmd launcher. */
+export const WINDOWS_CLAUDE_NAMES = ['claude.exe', 'claude.cmd']
+
+async function resolveOnWindows(): Promise<string | null> {
+  const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'Path'
+  const pathDirs = (process.env[pathKey] || '').split(';').filter(Boolean)
+  const seen = new Set<string>()
+  for (const dir of [...windowsClaudeDirs(), ...pathDirs]) {
+    const key = dir.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    for (const name of WINDOWS_CLAUDE_NAMES) {
+      const candidate = path.win32.join(dir, name)
+      try {
+        await fs.promises.access(candidate, fs.constants.F_OK)
+        return candidate
+      } catch {
+        continue
+      }
+    }
+  }
+  try {
+    const { stdout } = await execFileAsync('where.exe', ['claude'], { timeout: 5_000, windowsHide: true })
+    const first = stdout.split(/\r?\n/).map((l) => l.trim()).find(Boolean)
+    return first ?? null
+  } catch {
+    return null
+  }
 }

@@ -1,12 +1,12 @@
 {
   "$comment": "Stage 21e — fork-friendly architecture. Upstream Duo's defaults. To fork, copy this file to fork.config.json (gitignored) and edit. See docs/HOW-TO-FORK.md for the layered fork modes that read from this file.",
-  "appId": "com.geoffdudgeon.duo",
-  "productName": "Duo",
-  "copyright": "Copyright © 2026 Geoff",
+  "appId": "us.iogames.winduo",
+  "productName": "Winduo",
+  "copyright": "Copyright © 2026 Geoff Dudgeon and IOGames",
   "publish": {
     "provider": "github",
-    "owner": "dudgeon",
-    "repo": "duo"
+    "owner": "IOGamesUS",
+    "repo": "winduo"
   },
   "bootstrap": {
     "$comment": "Defaults for ~/.claude/duo/external-domains.json (host patterns matched against the hostname of any URL the agent tries to navigate to; matches route via shell.openExternal instead of the embedded browser) and ~/.claude/duo/pins.json (which help-bundle files first-launch pins). v0.4.3 ENH-009 expanded the externalDomains list to cover Slack, Gmail + Google Workspace, Atlassian, Microsoft 365 alongside the existing *.capitalone.com Acme default.",

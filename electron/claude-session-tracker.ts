@@ -19,6 +19,7 @@
 import { promises as fs, realpathSync } from 'fs'
 import path from 'path'
 import os from 'os'
+import { shellEnter } from '../shared/shell-enter'
 
 /**
  * Build the PTY command line for re-entering a Claude session, shared by the
@@ -38,16 +39,17 @@ import os from 'os'
  *
  * Callers must validate `uuid` (UUID regex) before passing it here.
  */
-export function buildResumeCommand(uuid: string, opts?: { fork?: boolean }): string {
+export function buildResumeCommand(uuid: string, opts?: { fork?: boolean }, platform: string = process.platform): string {
+  const enter = shellEnter(platform) // Windows support: `\r` runs a command there
   return opts?.fork
-    ? `claude --resume ${uuid} --fork-session\n`
-    : `claude --resume ${uuid}\n`
+    ? `claude --resume ${uuid} --fork-session${enter}`
+    : `claude --resume ${uuid}${enter}`
 }
 
 /**
  * Encode an absolute filesystem path the way Claude Code does to map
- * a cwd to its `~/.claude/projects/<dir>/` subdirectory. Both `/` and
- * `.` are mapped to `-` — verified against the live filesystem:
+ * a cwd to its `~/.claude/projects/<dir>/` subdirectory. Every character
+ * other than a letter or digit maps to `-` (see encodeResolvedPath):
  *
  *   /Users/geoffreydudgeon/Documents/GitHub/duo
  *     → -Users-geoffreydudgeon-Documents-GitHub-duo
@@ -70,7 +72,30 @@ export function encodeProjectDir(absPath: string): string {
   } catch {
     // Path doesn't exist or no perms — fall back to literal.
   }
-  return resolved.replace(/[/.]/g, '-')
+  return encodeResolvedPath(resolved)
+}
+
+/**
+ * The pure encoding step, without the realpath lookup. Claude Code turns
+ * every character outside [A-Za-z0-9] into `-` (not only `/` and `.`), so
+ * spaces, underscores and non-ASCII letters map to `-` too, and so do the
+ * `\` and `:` of a Windows path (`C:\Users\ian\proj` →
+ * `C--Users-ian-proj`). Over 200 characters, Claude keeps the first 200
+ * plus `-` and a base-36 hash of the unsanitized path (Java's
+ * String.hashCode, absolute value). Rule from duo-v2's ClaudeStorage.encode,
+ * which checks it against the real folders on every launch.
+ */
+export function encodeResolvedPath(resolved: string): string {
+  const sanitized = resolved.replace(/[^A-Za-z0-9]/g, '-')
+  if (sanitized.length <= 200) return sanitized
+  return sanitized.slice(0, 200) + '-' + Math.abs(javaHash(resolved)).toString(36)
+}
+
+/** Java's String.hashCode over UTF-16 code units, as a signed 32-bit int. */
+export function javaHash(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
+  return h
 }
 
 export interface DetectedClaudeSession {

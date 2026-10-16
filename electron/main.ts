@@ -4824,6 +4824,9 @@ async function promptToSaveCurrentWorkspace(action: 'open' | 'new' = 'open', win
 // denied, dead pid, unreadable) — caller falls back to the spawn CWD.
 // The 1-second timeout keeps a hung lsof from blocking the menu.
 function getLiveCwdForPid(pid: number): string | null {
+  // Windows support: no lsof there, and reading another process's cwd needs
+  // native code. Return null so callers use the spawn cwd (their fallback).
+  if (process.platform === 'win32') return null
   try {
     const out = execSync(`lsof -a -d cwd -p ${pid} -Fn`, {
       encoding: 'utf8',
@@ -4843,6 +4846,7 @@ function getLiveCwdForPid(pid: number): string | null {
 // args array) and does NOT block the main thread, so the project-rail
 // poll can resolve many terminals' live cwds in parallel.
 async function getLiveCwdForPidAsync(pid: number): Promise<string | null> {
+  if (process.platform === 'win32') return null // Windows support: see getLiveCwdForPid
   try {
     const { stdout } = await execFileAsync('lsof', ['-a', '-d', 'cwd', '-p', String(pid), '-Fn'], {
       timeout: 1000

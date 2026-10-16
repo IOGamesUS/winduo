@@ -69,6 +69,7 @@ import { deriveRecentEntry, resolveOpenTarget as classifyOpenTarget } from './op
 // ENH-224 Phase 3 (D6) — prefer the user's existing local clone over a managed checkout.
 import { matchLocalClone } from './git/local-clone-match'
 import { SOCKET_PATH, PORT_FILE } from './constants'
+import { usesUnixSocket } from './platform'
 import { attentionForEvent } from './attention'
 
 export interface NavBridge {
@@ -398,7 +399,8 @@ export interface NavBridge {
 function canonPath(p: string): string {
   let resolved = p
   try { resolved = fs.realpathSync(p) } catch { /* not yet on disk — use as-is */ }
-  return process.platform === 'darwin' ? resolved.toLowerCase() : resolved
+  // Windows paths (NTFS) are case-insensitive too.
+  return process.platform === 'darwin' || process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
 export class SocketServer {
@@ -467,7 +469,9 @@ export class SocketServer {
     // cannot re-bind / unlink the live socket. DECISIONS.md locks the
     // single-construction invariant; this enforces it mechanically.
     if (this.unixServer) return
-    this.startUnix()
+    // Windows support: no Unix socket there; the token-guarded TCP
+    // transport is the only one (core/platform.ts usesUnixSocket).
+    if (usesUnixSocket()) this.startUnix()
     this.startTcp()
   }
 

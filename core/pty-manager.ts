@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
-import { DEFAULT_SHELL, DEFAULT_CWD, TERMINAL_DEFAULTS, TERMINAL_MIN_COLS, SOCKET_PATH, SHIM_DIR } from './constants'
+import { DEFAULT_SHELL, DEFAULT_CWD, TERMINAL_DEFAULTS, TERMINAL_MIN_COLS, SOCKET_PATH, PORT_FILE, SHIM_DIR } from './constants'
+import { hasPosixProbes, pathDelimiter, pathKey } from './platform'
 import { resolveExistingCwd } from './cwd-utils'
 import { IPC } from '../shared/types'
 import { routeSend, disposeForWindow as disposeSessionsForWindow, listIdsByCwdOwned } from './pty-owner'
@@ -79,12 +80,21 @@ export class PtyManager {
     // higher up the lookup. If the shim hasn't been installed yet
     // (e.g. fresh user before clicking Install), the dir simply
     // doesn't resolve — `claude` falls through to the next PATH entry.
-    const userPath = (process.env.PATH ?? '')
+    //
+    // Windows support: the shim is a shell script, so it's skipped there and
+    // PATH is left as the user has it. PATH keeps its existing key (Windows
+    // spells it `Path`) and the platform's separator.
+    const baseEnv = { ...(process.env as Record<string, string>) }
+    const pk = pathKey(baseEnv)
+    const userPath = baseEnv[pk] ?? ''
     const env: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      PATH: `${SHIM_DIR}:${userPath}`,
+      ...baseEnv,
+      [pk]: hasPosixProbes() ? `${SHIM_DIR}${pathDelimiter()}${userPath}` : userPath,
       DUO_SESSION: '1',
       DUO_SOCKET: SOCKET_PATH,
+      // Windows support: the CLI's only transport there is TCP, found
+      // through this file, so point it at the live one.
+      DUO_PORT_FILE: PORT_FILE,
       // ENH-225 (F2/D9) — the owning tab's id. CONSUMED by the Duo-managed
       // attention hook (duo-attention.sh reads $DUO_TAB) so a Stop/permission
       // event posted via `duo attention` maps straight to this tab — no

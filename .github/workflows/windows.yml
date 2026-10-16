@@ -10,7 +10,10 @@ on:
 
 jobs:
   windows:
-    runs-on: windows-latest
+    # windows-2022, not windows-latest: the latest image ships Visual Studio
+    # 2026, which the node-gyp bundled with @electron/rebuild doesn't
+    # recognize yet, so node-pty fails to compile there.
+    runs-on: windows-2022
     timeout-minutes: 45
     defaults:
       run:

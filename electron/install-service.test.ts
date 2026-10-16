@@ -29,7 +29,9 @@ import {
   composeManagedClaudeMdBlock,
   planClaudeMdMerge,
   planCliShim,
-  planManagedHooksMerge
+  planManagedHooksMerge,
+  managedHookCommand,
+  windowsCliLauncher
 } from './install-service'
 
 describe('composeManagedClaudeMdBlock', () => {
@@ -328,5 +330,53 @@ describe('planManagedHooksMerge (ENH-225 attention-hook settings.json merge)', (
   it('tolerates a non-object / malformed settings input', () => {
     const out = planManagedHooksMerge(null as unknown as Record<string, unknown>, '1.2.3', SPECS)
     expect(duoEntries(out, 'Stop')).toHaveLength(1)
+  })
+})
+
+describe('Windows support: managed hooks and the CLI launcher', () => {
+  const HOOKS = 'C:\\Users\\ian\\.claude\\duo\\hooks'
+
+  it('keeps the POSIX shell-form command unchanged', () => {
+    expect(managedHookCommand('duo-attention', 'set', { windows: false, hooksDir: '/x' }))
+      .toEqual({ type: 'command', command: '$HOME/.claude/duo/hooks/duo-attention.sh set' })
+    expect(managedHookCommand('duo-open-file-guard', undefined, { windows: false, hooksDir: '/x' }))
+      .toEqual({ type: 'command', command: '$HOME/.claude/duo/hooks/duo-open-file-guard.sh' })
+  })
+
+  it('registers the .ps1 twin in exec form on Windows', () => {
+    const h = managedHookCommand('duo-attention', 'clear', { windows: true, hooksDir: HOOKS })
+    expect(h.command).toBe('powershell.exe')
+    expect(h.args).toEqual(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', HOOKS + '\\duo-attention.ps1', 'clear'])
+  })
+
+  it('merges exec-form hooks idempotently and keeps a user PowerShell hook', () => {
+    const mk = (event: string, arg: string) => {
+      const h = managedHookCommand('duo-attention', arg, { windows: true, hooksDir: HOOKS })
+      return { event, command: h.command, args: h.args }
+    }
+    const specs = [mk('Stop', 'set'), mk('UserPromptSubmit', 'clear')]
+    const userHook = { hooks: [{ type: 'command', command: 'powershell.exe', args: ['-File', 'C:\\mine.ps1'] }] }
+    const once: any = planManagedHooksMerge({ hooks: { Stop: [userHook] } }, '1.0.0', specs)
+    const twice: any = planManagedHooksMerge(once, '1.0.0', specs)
+    expect(twice).toEqual(once)
+    expect(once.hooks.Stop).toHaveLength(2)
+    expect(once.hooks.Stop[0]).toEqual(userHook)
+    expect(once.hooks.Stop[1].hooks[0].args.at(-1)).toBe('set')
+  })
+
+  it('drops an unmarked orphan only when command and args both match', () => {
+    const h = managedHookCommand('duo-attention', 'set', { windows: true, hooksDir: HOOKS })
+    const orphan = { hooks: [h] }
+    const out: any = planManagedHooksMerge({ hooks: { Stop: [orphan] } }, '1.0.0', [{ event: 'Stop', command: h.command, args: h.args }])
+    expect(out.hooks.Stop).toHaveLength(1)
+    expect(typeof out.hooks.Stop[0]._duo).toBe('string')
+  })
+
+  it('writes a CRLF batch launcher that runs the CLI with Electron as Node', () => {
+    const text = windowsCliLauncher('C:\\Program Files\\Duo\\Duo.exe', 'C:\\Users\\ian\\.local\\bin\\duo-cli.js')
+    const lines = text.split('\r\n')
+    expect(lines[0]).toBe('@echo off')
+    expect(lines).toContain('set ELECTRON_RUN_AS_NODE=1')
+    expect(lines).toContain('"C:\\Program Files\\Duo\\Duo.exe" "C:\\Users\\ian\\.local\\bin\\duo-cli.js" %*')
   })
 })

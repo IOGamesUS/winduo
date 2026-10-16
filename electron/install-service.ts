@@ -67,6 +67,7 @@ import { app } from 'electron'
 import type { InstallStatus, InstallResult, CliInstallStatus, PrimingInstallStatus, AddToShellPathResult } from '../shared/types'
 import { SHIM_DIR } from '../core/constants'
 import { resolveClaudeBinary } from '../core/resolve-claude'
+import { IS_WINDOWS, pathDelimiter } from '../core/platform'
 
 const HOME = os.homedir()
 const DUO_DIR = path.join(HOME, '.claude', 'duo')
@@ -80,7 +81,11 @@ const HELP_DEST_DIR = path.join(DUO_DIR, 'help')
 // declared canvases the first time a pack@version is encountered.
 const PACKS_DEST_DIR = path.join(DUO_DIR, 'packs')
 const CLI_DEST_DIR = path.join(HOME, '.local', 'bin')
-const CLI_DEST_PATH = path.join(CLI_DEST_DIR, 'duo')
+// Windows support: `duo` there is a duo.cmd launcher that runs the CLI
+// bundle (copied beside it as duo-cli.js) with Duo's own Electron as Node,
+// so no separate Node install is needed. See windowsCliLauncher().
+const CLI_DEST_PATH = path.join(CLI_DEST_DIR, IS_WINDOWS ? 'duo.cmd' : 'duo')
+const WIN_CLI_BUNDLE_PATH = path.join(CLI_DEST_DIR, 'duo-cli.js')
 // ENH-141 — secondary CLI placement inside SHIM_DIR (~/.claude/duo/bin),
 // which PtyManager prepends to PATH at PTY spawn. The Unix-bin copy at
 // CLI_DEST_PATH still lands for external Terminal/iTerm use (auto-wired
@@ -108,22 +113,24 @@ const USER_CLAUDE_MD_PATH = path.join(HOME, '.claude', 'CLAUDE.md')
 // DUO_SESSION-gated shell script ships in the repo at
 // skill/scripts/duo-open-file-guard.sh; the installer copies it to
 // HOOKS_DEST_DIR (chmod 755) and registers a PreToolUse entry in
-// ~/.claude/settings.json pointing at PRETOOL_GUARD_COMMAND. The command
+// ~/.claude/settings.json (see managedHookCommand). The command
 // uses $HOME (not the literal homedir) so the registered settings entry
 // stays portable. Convenience-only — never load-bearing; a write failure
 // is caught + warned and the install continues (mirrors the SessionStart
 // hook's enterprise-locked-settings tolerance).
 const HOOKS_DEST_DIR = path.join(DUO_DIR, 'hooks')
-const PRETOOL_GUARD_DEST = path.join(HOOKS_DEST_DIR, 'duo-open-file-guard.sh')
-const PRETOOL_GUARD_COMMAND = '$HOME/.claude/duo/hooks/duo-open-file-guard.sh'
+// Windows support: the hooks ship as .ps1 scripts there and register in
+// exec form (command + args), which Claude Code spawns directly with
+// powershell.exe, Git Bash or not. See managedHookCommand().
+const HOOK_EXT = IS_WINDOWS ? '.ps1' : '.sh'
+const PRETOOL_GUARD_DEST = path.join(HOOKS_DEST_DIR, 'duo-open-file-guard' + HOOK_EXT)
 
 // ENH-225 (F2/D9) — the "waiting on you" attention hook. Ships to
 // ~/.claude/duo/hooks/duo-attention.sh and is registered on three events:
 // Stop + Notification (→ `set`, the session went idle / is prompting) and
 // UserPromptSubmit (→ `clear`, the user acted). The script reads $DUO_TAB and
 // posts to Duo's socket via the CLI; a no-op outside Duo (never fails a hook).
-const ATTENTION_HOOK_DEST = path.join(HOOKS_DEST_DIR, 'duo-attention.sh')
-const ATTENTION_HOOK_COMMAND = '$HOME/.claude/duo/hooks/duo-attention.sh'
+const ATTENTION_HOOK_DEST = path.join(HOOKS_DEST_DIR, 'duo-attention' + HOOK_EXT)
 const ATTENTION_HOOK_EVENTS: { event: string; arg: 'set' | 'clear' }[] = [
   { event: 'Stop', arg: 'set' },
   { event: 'Notification', arg: 'set' },
@@ -370,6 +377,66 @@ export interface EnsureCliShimResult {
 export interface ManagedHookSpec {
   event: string
   command: string
+  /** Exec form (Windows): Claude Code spawns `command` with these args
+   *  directly, with no shell in between. Absent for shell form. */
+  args?: string[]
+}
+
+/** The inner hook object Claude Code reads for one managed hook. */
+export interface ManagedHookCommand {
+  type: 'command'
+  command: string
+  args?: string[]
+}
+
+/** Windows support: how a Duo hook script is registered on each platform.
+ *  POSIX keeps the existing shell form (`$HOME/.claude/duo/hooks/x.sh arg`).
+ *  Windows uses exec form with powershell.exe and the .ps1 twin, because a
+ *  shell-form command would run under Git Bash or PowerShell depending on
+ *  what's installed, and Claude Code spawns exec form the same way on every
+ *  machine. */
+export function managedHookCommand(
+  scriptBase: string,
+  arg: string | undefined,
+  opts: { windows: boolean; hooksDir: string }
+): ManagedHookCommand {
+  if (opts.windows) {
+    const script = path.win32.join(opts.hooksDir, scriptBase + '.ps1')
+    return {
+      type: 'command',
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, ...(arg ? [arg] : [])]
+    }
+  }
+  const cmd = `$HOME/.claude/duo/hooks/${scriptBase}.sh`
+  return { type: 'command', command: arg ? `${cmd} ${arg}` : cmd }
+}
+
+/** Whether an inner hook object is the same command as a spec (command and,
+ *  in exec form, args). Comparing args matters on Windows: every exec-form
+ *  PowerShell hook has command `powershell.exe`, user hooks included. */
+function sameHookCommand(h: unknown, command: string, args?: string[]): boolean {
+  if (!h || typeof h !== 'object') return false
+  const o = h as Record<string, unknown>
+  if (o.command !== command) return false
+  const theirs = Array.isArray(o.args) ? o.args : undefined
+  if (!args && !theirs) return true
+  return JSON.stringify(theirs ?? null) === JSON.stringify(args ?? null)
+}
+
+/** Windows support: the duo.cmd launcher. It runs the CLI bundle with Duo's
+ *  own Electron binary in Node mode (ELECTRON_RUN_AS_NODE), so `duo` works
+ *  without a separate Node install. Rewritten on every launch by
+ *  ensureCliShim(), so it follows Duo if the app moves. */
+export function windowsCliLauncher(electronExe: string, cliBundle: string): string {
+  return [
+    '@echo off',
+    'rem duo-managed launcher for the duo CLI. Rewritten by Duo on every launch.',
+    'setlocal',
+    'set ELECTRON_RUN_AS_NODE=1',
+    `"${electronExe}" "${cliBundle}" %*`,
+    ''
+  ].join('\r\n')
 }
 
 /**
@@ -392,7 +459,7 @@ export function planManagedHooksMerge(
     ? { ...(base.hooks as Record<string, unknown>) }
     : {})
 
-  for (const { event, command } of specs) {
+  for (const { event, command, args } of specs) {
     const existing = Array.isArray(hooks[event]) ? hooks[event] as unknown[] : []
     const filtered = existing.filter(entry => {
       if (!entry || typeof entry !== 'object') return true
@@ -400,15 +467,12 @@ export function planManagedHooksMerge(
       const marker = e[HOOK_MARKER_KEY]
       const isMarkedDuo = typeof marker === 'string' && marker.startsWith(HOOK_MARKER_PREFIX)
       const inner = e.hooks
-      const isOrphanDuoCommand = !isMarkedDuo && Array.isArray(inner) && inner.some(h =>
-        h && typeof h === 'object' &&
-        (h as Record<string, unknown>).command === command
-      )
+      const isOrphanDuoCommand = !isMarkedDuo && Array.isArray(inner) && inner.some(h => sameHookCommand(h, command, args))
       return !(isMarkedDuo || isOrphanDuoCommand)
     })
     const duoEntry = {
       [HOOK_MARKER_KEY]: `${HOOK_MARKER_PREFIX}${version}`,
-      hooks: [{ type: 'command', command }]
+      hooks: [args ? { type: 'command', command, args } : { type: 'command', command }]
     }
     hooks[event] = [...filtered, duoEntry]
   }
@@ -474,12 +538,16 @@ export class InstallService {
    * Duo terminal won't find duo" (worth a banner hint).
    */
   private isOnPath(targetDir: string): boolean {
-    const pathEnv = process.env.PATH || ''
-    const target = path.resolve(targetDir)
-    return pathEnv.split(':').some(segment => {
+    // Windows support: PATH may be spelled `Path`, entries split on `;`,
+    // and compare case-insensitively.
+    const pathKey = Object.keys(process.env).find(k => k.toUpperCase() === 'PATH') ?? 'PATH'
+    const pathEnv = process.env[pathKey] || ''
+    const norm = (p: string): string => IS_WINDOWS ? path.resolve(p).toLowerCase() : path.resolve(p)
+    const target = norm(targetDir)
+    return pathEnv.split(pathDelimiter()).some(segment => {
       if (!segment) return false
       try {
-        return path.resolve(segment) === target
+        return norm(segment) === target
       } catch {
         return false
       }
@@ -567,7 +635,7 @@ export class InstallService {
       // 755 — safeOverwriteFile copies the bytes but not the exec bit,
       // and a PreToolUse hook must be executable.
       fileResults.push(await this.safeOverwriteFile(
-        path.join(sourceRoot, 'skill', 'scripts', 'duo-open-file-guard.sh'),
+        path.join(sourceRoot, 'skill', 'scripts', 'duo-open-file-guard' + HOOK_EXT),
         PRETOOL_GUARD_DEST,
         prevShas
       ))
@@ -576,7 +644,7 @@ export class InstallService {
       // ENH-225 — skill/scripts/duo-attention.sh → ~/.claude/duo/hooks/. Same
       // provenance-aware copy + chmod 755 as the guard (a hook must be exec).
       fileResults.push(await this.safeOverwriteFile(
-        path.join(sourceRoot, 'skill', 'scripts', 'duo-attention.sh'),
+        path.join(sourceRoot, 'skill', 'scripts', 'duo-attention' + HOOK_EXT),
         ATTENTION_HOOK_DEST,
         prevShas
       ))
@@ -978,6 +1046,9 @@ export class InstallService {
    *    shimInstalled=false.
    */
   private async installShim(): Promise<void> {
+    // Windows support: the priming shim is a /bin/sh script, so it isn't
+    // installed there yet (the SessionStart hook still primes sessions).
+    if (IS_WINDOWS) throw new Error('PATH shim not supported on Windows yet')
     const realClaude = await this.resolveRealClaude()
     if (!realClaude) {
       // Don't install a broken shim that would shadow whatever the
@@ -1179,7 +1250,7 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
    * hooks.
    *
    * Our prior entry is identified by EITHER the `_duo` marker key OR an
-   * inner `hooks[].command === PRETOOL_GUARD_COMMAND` (catches a
+   * inner hook that is our guard's command (catches a
    * pre-marker / hand-mirrored orphan, exactly like the SessionStart
    * merge's command-equivalence guard). Foreign entries — anything
    * without our marker and without our command — pass through untouched.
@@ -1217,11 +1288,8 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
       if (!entry || typeof entry !== 'object') return false
       const inner = (entry as Record<string, unknown>).hooks
       if (!Array.isArray(inner)) return false
-      return inner.some(h =>
-        h && typeof h === 'object' &&
-        typeof (h as Record<string, unknown>).command === 'string' &&
-        ((h as Record<string, unknown>).command as string) === PRETOOL_GUARD_COMMAND
-      )
+      const guard = managedHookCommand('duo-open-file-guard', undefined, { windows: IS_WINDOWS, hooksDir: HOOKS_DEST_DIR })
+      return inner.some(h => sameHookCommand(h, guard.command, guard.args))
     }
     const filtered = existing.filter(entry => {
       if (!entry || typeof entry !== 'object') return true
@@ -1237,7 +1305,7 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
       [HOOK_MARKER_KEY]: `${HOOK_MARKER_PREFIX}${app.getVersion()}`,
       matcher: 'Edit|Write|MultiEdit',
       hooks: [
-        { type: 'command', command: PRETOOL_GUARD_COMMAND }
+        managedHookCommand('duo-open-file-guard', undefined, { windows: IS_WINDOWS, hooksDir: HOOKS_DEST_DIR })
       ]
     }
 
@@ -1274,10 +1342,10 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
 
     // Pure merge (unit-tested in install-service.test.ts). Each event's command
     // is `<script> <arg>`; the arg distinguishes the set vs clear registration.
-    const specs = ATTENTION_HOOK_EVENTS.map(({ event, arg }) => ({
-      event,
-      command: `${ATTENTION_HOOK_COMMAND} ${arg}`,
-    }))
+    const specs = ATTENTION_HOOK_EVENTS.map(({ event, arg }) => {
+      const h = managedHookCommand('duo-attention', arg, { windows: IS_WINDOWS, hooksDir: HOOKS_DEST_DIR })
+      return { event, command: h.command, ...(h.args ? { args: h.args } : {}) }
+    })
     const merged = planManagedHooksMerge(settings, app.getVersion(), specs)
 
     await fs.mkdir(path.dirname(SETTINGS_PATH), { recursive: true })
@@ -1333,6 +1401,7 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
    * `command not found` can read this file directly.
    */
   async ensureCliShim(): Promise<EnsureCliShimResult> {
+    if (IS_WINDOWS) return this.ensureWindowsCliLauncher()
     const source = await this.findCliSource()
     if (!source) {
       const err = `no CLI binary found at ${path.join(app.getAppPath(), 'cli', 'duo')} or resourcesPath/cli/duo`
@@ -1367,6 +1436,29 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
       const msg = err instanceof Error ? err.message : String(err)
       await this.writeShimLog(`symlink ${CLI_SHIM_PATH} → ${source}: ${msg}`)
       return { ok: false, action: 'error', shimPath: CLI_SHIM_PATH, target: source, error: msg }
+    }
+  }
+
+  /** Windows support: copy the CLI bundle to ~/.local/bin/duo-cli.js and
+   *  (re)write ~/.local/bin/duo.cmd to launch it. No symlinks: creating one
+   *  needs Developer Mode or admin rights on Windows. Claude Code's native
+   *  installer puts ~/.local/bin on PATH, so `duo` resolves there. */
+  private async ensureWindowsCliLauncher(): Promise<EnsureCliShimResult> {
+    const source = await this.findCliSource()
+    if (!source) {
+      const err = 'no CLI bundle found to install'
+      await this.writeShimLog(err)
+      return { ok: false, action: 'no-source', shimPath: CLI_DEST_PATH, error: err }
+    }
+    try {
+      await fs.mkdir(CLI_DEST_DIR, { recursive: true })
+      await fs.copyFile(source, WIN_CLI_BUNDLE_PATH)
+      await fs.writeFile(CLI_DEST_PATH, windowsCliLauncher(process.execPath, WIN_CLI_BUNDLE_PATH))
+      return { ok: true, action: 'replaced', shimPath: CLI_DEST_PATH, target: WIN_CLI_BUNDLE_PATH }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      await this.writeShimLog(`windows launcher ${CLI_DEST_PATH}: ${msg}`)
+      return { ok: false, action: 'error', shimPath: CLI_DEST_PATH, target: source, error: msg }
     }
   }
 
@@ -1410,6 +1502,11 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
         installed: false,
         onPath: this.isOnPath(CLI_DEST_DIR)
       }
+    }
+
+    if (IS_WINDOWS) {
+      const res = await this.ensureWindowsCliLauncher()
+      return { installed: res.ok, ...(res.ok ? { path: CLI_DEST_PATH } : {}), onPath: this.isOnPath(CLI_DEST_DIR) }
     }
 
     try {

@@ -1,12 +1,15 @@
 import { homedir } from 'os'
 import { join } from 'path'
+import { duoDataDir, defaultShell } from './platform'
 
 export const APP_NAME = 'Duo'
 // APP_VERSION removed 2026-05-29: it drifted (hardcoded '0.1.0' vs package
 // 0.8.5). The real version now flows app.getVersion() → SocketServer ctor
 // (the `duo doctor` ping); the CLI bakes it via esbuild define. SoT: package.json.
 
-export const DUO_DIR = join(homedir(), 'Library', 'Application Support', 'duo')
+// Windows support: per-platform app data folder (core/platform.ts). macOS
+// keeps ~/Library/Application Support/duo.
+export const DUO_DIR = duoDataDir()
 export const SOCKET_PATH = join(DUO_DIR, 'duo.sock')
 
 // Stage 20 — TCP fallback. Claude Code's macOS sandbox blocks Unix
@@ -43,7 +46,7 @@ export const INSTALLED_PACKS_PATH = join(homedir(), '.claude', 'duo', 'installed
 export const BROWSER_SESSION_PARTITION = 'persist:duo-browser'
 export const BROWSER_SESSION_PATH = join(DUO_DIR, 'browser-session')
 
-export const DEFAULT_SHELL = process.env.SHELL ?? '/bin/zsh'
+export const DEFAULT_SHELL = defaultShell()
 export const DEFAULT_CWD = homedir()
 
 export const TERMINAL_DEFAULTS = {

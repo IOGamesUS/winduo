@@ -1,3 +1,4 @@
+import { shellEnter } from '../shared/shell-enter'
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { buildWikilinkCreatePath } from './wikilinkCreate'
 import { TabBar } from './components/TabBar'
@@ -2007,7 +2008,9 @@ export function App() {
         // PTY input is line-buffered: zsh reads `claude\n`, execs
         // claude, claude inherits stdin with `<cmd>\n` already in the
         // buffer, claude reads it as the first user message.
-        payload = cmd && cmd.length > 0 ? `claude\n${cmd}\n` : 'claude\n'
+        // Windows support: `\r` runs the command there (shellEnter).
+        const enter = shellEnter(window.electron.env.platform)
+        payload = cmd && cmd.length > 0 ? `claude${enter}${cmd}${enter}` : `claude${enter}`
       } else {
         // claude not on PATH — show the install banner. Cmd (if any)
         // is dropped: it's a Claude prompt, useless without Claude.
