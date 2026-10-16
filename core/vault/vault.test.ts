@@ -320,3 +320,29 @@ describe('OKF detection (ENH-216 D4)', () => {
     expect(findVaultRoot(nested)).toBe(path.resolve(tmp))
   })
 })
+
+// Windows support: the same corpus from a copy of the prototype vault whose
+// notes use CRLF line endings (as Windows editors save them), regardless of
+// how git checked this repo out.
+describe('corpus with Windows (CRLF) line endings', () => {
+  it('reads types, aliases and entities the same as with LF', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-vault-crlf-'))
+    fs.cpSync(VAULT, tmp, { recursive: true })
+    const walk = (d: string): void => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name)
+        if (e.isDirectory()) walk(p)
+        else if (/\.(md|base)$/.test(e.name)) fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/\r?\n/g, '\r\n'))
+      }
+    }
+    walk(tmp)
+    const lf = buildCorpus(VAULT)
+    const crlf = buildCorpus(tmp)
+    expect(crlf.aliases).toEqual(lf.aliases)
+    expect(crlf.types).toEqual(lf.types)
+    expect(crlf.entities.map((e) => e.name)).toEqual(lf.entities.map((e) => e.name))
+    expect(crlf.propsByType).toEqual(lf.propsByType)
+    expect(Object.keys(lf.aliases).length).toBeGreaterThan(0)
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+})

@@ -204,7 +204,7 @@ describe('vault capture', () => {
     const c = captureNote(v, { text: 'a quick thought', date: new Date('2026-06-09T14:32:05') })
     // YYYY-MM-DD-HHMMSS — date+time hyphen-joined so an untitled capture has
     // no space in its name (owner ask 2026-06-12).
-    expect(c.path).toMatch(/^inbox\/2026-06-09-143205\.md$/)
+    expect(c.path).toMatch(/^inbox[\\/]2026-06-09-143205\.md$/) // either separator (Windows support)
     expect(c.type).toBeNull()
     const content = fs.readFileSync(c.absPath, 'utf8')
     expect(content).toContain('captured: 2026-06-09')

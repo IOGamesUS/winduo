@@ -29,6 +29,7 @@ import {
   type LiveCwdGroup,
   type OpenByUuid,
 } from './home-snapshot'
+import { mainRepoFromGitdir } from './home-snapshot'
 import { SessionDigestStore } from '../core/session-digest-store'
 import { HomeStateStore } from '../core/home-state-store'
 import { hashColorIndex } from '../shared/projects'
@@ -749,5 +750,21 @@ describe('buildCatchupSnapshot — columns, two-tier, dedup, §D9', () => {
     // Warm: same store, now serving cache hits → identical board.
     const warm = await build({ openByUuid: open, now })
     expect(warm).toEqual(cold)
+  })
+})
+
+describe('mainRepoFromGitdir (Windows support)', () => {
+  it('reads POSIX gitdirs', () => {
+    expect(mainRepoFromGitdir('/r/repo-a/.git/worktrees/feature', '/r/repo-a-wt', path.posix)).toBe('/r/repo-a')
+  })
+  it('reads Windows gitdirs with forward or back slashes', () => {
+    expect(mainRepoFromGitdir('C:/r/repo-a/.git/worktrees/feature', 'C:\\r\\wt', path.win32)).toBe('C:\\r\\repo-a')
+    expect(mainRepoFromGitdir('C:\\r\\repo-a\\.git\\worktrees\\feature', 'C:\\r\\wt', path.win32)).toBe('C:\\r\\repo-a')
+  })
+  it('resolves a relative gitdir against the worktree', () => {
+    expect(mainRepoFromGitdir('../repo-a/.git/worktrees/x', '/r/wt', path.posix)).toBe('/r/repo-a')
+  })
+  it('returns null for a non-worktree gitdir', () => {
+    expect(mainRepoFromGitdir('/r/repo/.git/modules/sub', '/r/repo/sub', path.posix)).toBeNull()
   })
 })

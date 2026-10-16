@@ -24,6 +24,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { isVaultRoot, findVaultRoot, resolveVault, detectVaultMode, isForeignVault } from './detect'
+import { readText, writeText } from './eol' // Windows support: line endings
 
 /** Default storage path. Overridable for tests. */
 export const DEFAULT_VAULT_FILE = path.join(os.homedir(), '.claude', 'duo', 'vault.json')
@@ -42,7 +43,7 @@ export interface VaultPrefs {
 function readPrefs(filePath: string): VaultPrefs {
   let raw: string
   try {
-    raw = fs.readFileSync(filePath, 'utf8')
+    raw = readText(filePath)
   } catch {
     return {}
   }
@@ -80,7 +81,7 @@ export function writePrefs(prefs: VaultPrefs, filePath: string): void {
   if (known.length > 0) out.knownVaults = known
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   const tmp = `${filePath}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n')
+  writeText(tmp, JSON.stringify(out, null, 2) + '\n')
   fs.renameSync(tmp, filePath)
 }
 
@@ -117,7 +118,7 @@ export function seedObsidianAppJson(vaultRoot: string): boolean {
   const target = path.join(vaultRoot, '.obsidian', 'app.json')
   if (fs.existsSync(target)) return false
   fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.writeFileSync(target, JSON.stringify(OBSIDIAN_APP_JSON, null, 2) + '\n')
+  writeText(target, JSON.stringify(OBSIDIAN_APP_JSON, null, 2) + '\n')
   return true
 }
 

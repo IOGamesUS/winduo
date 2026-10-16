@@ -11,6 +11,7 @@ import { load as yamlLoad } from 'js-yaml'
 import type { Corpus } from './types'
 import { buildCorpus } from './corpus'
 import { walk, readNotes } from './parse'
+import { readText } from './eol' // Windows support: line endings
 
 export interface LintFinding {
   severity: 'error' | 'warn'
@@ -248,7 +249,7 @@ export function lintVault(root: string, target: '--all' | string): LintResult[] 
     const rel = path.relative(root, abs).split(path.sep).join('/')
     let def: BaseDefLike
     try {
-      def = yamlLoad(fs.readFileSync(abs, 'utf8')) as BaseDefLike
+      def = yamlLoad(readText(abs)) as BaseDefLike
     } catch (e) {
       results.push({ source: rel, findings: [], parseError: e instanceof Error ? e.message : String(e) })
       return

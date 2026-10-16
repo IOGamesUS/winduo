@@ -34,11 +34,8 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      # The suite was written on macOS, so some tests may assume POSIX
-      # paths. Kept non-blocking until the Windows failures are triaged;
-      # the log shows which ones fail.
+      # Blocking: the full suite must pass on Windows.
       - name: Tests
-        continue-on-error: true
         run: npx vitest run
 
       - name: Build the Windows installer

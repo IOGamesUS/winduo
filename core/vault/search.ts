@@ -14,6 +14,7 @@ import path from 'node:path'
 import { walk } from './parse'
 import { OUTPUT_DIR_NAMES } from './output-dir'
 import type { SearchHit } from './types'
+import { readText, readTextAsync } from './eol' // Windows support: line endings
 
 /** ENH-214 — the ⌘⇧F palette (and its `duo vault search` twin) must SEE
  *  template files. The graph/parse walk excludes `templates/` (parse.ts
@@ -118,7 +119,7 @@ export function search(root: string, query: string, limit = VAULT_SEARCH_DEFAULT
   for (const abs of walk(root, SEARCH_SKIP_DIRS).filter((p) => p.endsWith('.md')).sort()) {
     let raw: string
     try {
-      raw = fs.readFileSync(abs, 'utf8')
+      raw = readText(abs)
     } catch {
       continue
     }
@@ -173,7 +174,7 @@ export async function searchAsync(
     if (i % 16 === 15) await new Promise<void>((resolve) => setImmediate(resolve))
     let raw: string
     try {
-      raw = await fs.promises.readFile(files[i], 'utf8')
+      raw = await readTextAsync(files[i])
     } catch {
       continue
     }

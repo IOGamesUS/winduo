@@ -63,7 +63,9 @@ exit 0
   return { calls, threw }
 }
 
-describe('duo-attention.sh (turn-boundary hook: badge + ENH-231 digest)', () => {
+// Windows support: this exercises the /bin/sh script; Windows runs the .ps1
+// twin instead (duo-attention-ps1.test.ts).
+describe.skipIf(process.platform === 'win32')('duo-attention.sh (turn-boundary hook: badge + ENH-231 digest)', () => {
   it('set → flips the badge AND materializes the full digest', () => {
     const { calls, threw } = runHook('set')
     expect(threw).toBe(false)

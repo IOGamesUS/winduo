@@ -10,6 +10,7 @@ import { load as yamlLoad } from 'js-yaml'
 import { extractLinkRefs, extractLinkKeys } from '../markdown/vaultLinks'
 import { OUTPUT_DIR_NAMES } from './output-dir'
 import type { VaultFile } from './types'
+import { readText } from './eol' // Windows support: line endings
 
 /** Directories never walked for entities or queries. `templates/` is
  *  query-excluded per D5 (read separately as the schema registry);
@@ -96,7 +97,7 @@ export function extractWikilinks(text: string): string[] {
 /** Parse one markdown file into a {@link VaultFile}. `root` is the vault
  *  root used to compute the relative path/folder. */
 export function parseFile(absPath: string, root: string): VaultFile {
-  const raw = fs.readFileSync(absPath, 'utf8')
+  const raw = readText(absPath)
   const { frontmatter, body } = splitFrontmatter(raw)
   // ENH-216: extract once, both syntaxes (wikilink + mdlink), with provenance.
   const refs = extractLinkRefs(raw)

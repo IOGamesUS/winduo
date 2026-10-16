@@ -3,23 +3,27 @@
 // logic that decides where a doc lands and whether it needs --branch vs checkout.
 
 import { describe, it, expect } from 'vitest'
+import * as path from 'path'
 import { managedCheckoutDir, isLikelySha } from './open-checkout'
+
+// Windows support: the dir is built with path.join, so expect native separators.
+const under = (name: string): string => path.join('/base', name)
 
 describe('managedCheckoutDir — opaque deterministic dir (DR6)', () => {
   it('owner-repo@ref under the base dir', () => {
-    expect(managedCheckoutDir('dudgeon', 'duo', 'main', '/base')).toBe('/base/dudgeon-duo@main')
+    expect(managedCheckoutDir('dudgeon', 'duo', 'main', '/base')).toBe(under('dudgeon-duo@main'))
   })
 
   it('sanitizes a slashed branch ref into one segment', () => {
-    expect(managedCheckoutDir('o', 'r', 'release/1.x', '/base')).toBe('/base/o-r@release-1.x')
+    expect(managedCheckoutDir('o', 'r', 'release/1.x', '/base')).toBe(under('o-r@release-1.x'))
   })
 
   it('keeps dots + dashes (tags like v1.2.3)', () => {
-    expect(managedCheckoutDir('o', 'r', 'v1.2.3', '/base')).toBe('/base/o-r@v1.2.3')
+    expect(managedCheckoutDir('o', 'r', 'v1.2.3', '/base')).toBe(under('o-r@v1.2.3'))
   })
 
   it('an empty ref falls back to @HEAD', () => {
-    expect(managedCheckoutDir('o', 'r', '', '/base')).toBe('/base/o-r@HEAD')
+    expect(managedCheckoutDir('o', 'r', '', '/base')).toBe(under('o-r@HEAD'))
   })
 
   it('is deterministic (same inputs → same dir, for idempotent reuse)', () => {

@@ -169,15 +169,30 @@ async function mainRepoForWorktree(dir: string): Promise<string | null> {
     const text = await fs.readFile(gitPath, 'utf8')
     const m = /^gitdir:\s*(.+)\s*$/m.exec(text)
     if (!m) return null
-    const gitdir = m[1].trim()
-    // .../<repo>/.git/worktrees/<name> → strip the trailing
-    // /.git/worktrees/<name> to recover <repo>.
-    const idx = gitdir.indexOf('/.git/worktrees/')
-    if (idx <= 0) return null
-    return gitdir.slice(0, idx)
+    return mainRepoFromGitdir(m[1].trim(), dir)
   } catch {
     return null
   }
+}
+
+/**
+ * The main repo root named by a worktree's `gitdir:` line, or null when it
+ * isn't a worktree gitdir. `.../<repo>/.git/worktrees/<name>` → `<repo>`.
+ *
+ * Windows support: git writes this path with forward slashes on Windows
+ * (`C:/Users/...`), and other tools may write backslashes, so both
+ * separators are accepted. The result goes through path.resolve (relative
+ * gitdirs resolve against the worktree) so it compares equal to the
+ * native-separator paths the rest of the rollup uses.
+ */
+export function mainRepoFromGitdir(
+  gitdir: string,
+  worktreeDir: string,
+  p: Pick<typeof path, 'resolve'> = path
+): string | null {
+  const m = /[\\/]\.git[\\/]worktrees[\\/]/.exec(gitdir)
+  if (!m || m.index <= 0) return null
+  return p.resolve(worktreeDir, gitdir.slice(0, m.index))
 }
 
 /**

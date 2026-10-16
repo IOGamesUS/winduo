@@ -26,6 +26,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parseFile, splitFrontmatter } from './parse'
 import { sourceHash } from './render'
+import { readText, writeText } from './eol' // Windows support: line endings
 
 const ROLLUPS_DIR = 'rollups'
 
@@ -171,7 +172,7 @@ export function resolveRollupNote(root: string, target: string): ResolvedRollupN
   }
   if (!abs) return null
 
-  const { frontmatter } = splitFrontmatter(fs.readFileSync(abs, 'utf8'))
+  const { frontmatter } = splitFrontmatter(readText(abs))
   if (frontmatter.type !== 'rollup') return null
 
   const outRel = asString(frontmatter.out)
@@ -243,9 +244,9 @@ export function duplicateRollup(root: string, target: string): DuplicateRollupRe
     const stem = `${resolved.slug}-copy`
     let slug = stem
     for (let n = 2; fs.existsSync(path.join(dir, `${slug}.md`)); n++) slug = `${stem}-${n}`
-    const raw = fs.readFileSync(resolved.noteAbs, 'utf8')
+    const raw = readText(resolved.noteAbs)
     const abs = path.join(dir, `${slug}.md`)
-    fs.writeFileSync(abs, raw)
+    writeText(abs, raw)
     // Surgical field edits on the COPY: new title, no inherited provenance
     // (null = delete the key — same line-level discipline as the stamp).
     editFrontmatterLines(abs, {
@@ -308,7 +309,7 @@ export function rollupArtifactInfo(absPath: string, isRoot: (dir: string) => boo
       let legacyTemplate = false
       if (/\.html?$/i.test(target)) {
         try {
-          legacyTemplate = fs.readFileSync(target, 'utf8').includes(LEGACY_REFRESH_BUTTON_MARKER)
+          legacyTemplate = readText(target).includes(LEGACY_REFRESH_BUTTON_MARKER)
         } catch {
           legacyTemplate = false
         }
@@ -337,7 +338,7 @@ function yamlScalar(v: string): string {
  *  (only touched lines change), generalized with delete support for
  *  {@link duplicateRollup}. */
 function editFrontmatterLines(noteAbs: string, updates: Record<string, string | null>): void {
-  const raw = fs.readFileSync(noteAbs, 'utf8')
+  const raw = readText(noteAbs)
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?/)
   if (!m) return
   const remaining = { ...updates }
@@ -355,7 +356,7 @@ function editFrontmatterLines(noteAbs: string, updates: Record<string, string | 
   }
   for (const [k, v] of Object.entries(remaining)) if (v !== null) lines.push(`${k}: ${v}`)
   const body = raw.slice(m[0].length)
-  fs.writeFileSync(noteAbs, `---\n${lines.join('\n')}\n---\n${body}`)
+  writeText(noteAbs, `---\n${lines.join('\n')}\n---\n${body}`)
 }
 
 /** Surgically stamp render provenance into a rollup note's frontmatter —
@@ -375,13 +376,13 @@ export function stampRollupProvenance(
     last_hash: yamlScalar(fields.last_hash),
     out: yamlScalar(fields.out),
   }
-  const raw = fs.readFileSync(noteAbs, 'utf8')
+  const raw = readText(noteAbs)
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?/)
 
   if (!m) {
     // No frontmatter — mint a minimal block (defensive; rollup notes carry one).
     const block = Object.entries(updates).map(([k, v]) => `${k}: ${v}`).join('\n')
-    fs.writeFileSync(noteAbs, `---\n${block}\n---\n\n${raw}`)
+    writeText(noteAbs, `---\n${block}\n---\n\n${raw}`)
     return
   }
 
@@ -396,7 +397,7 @@ export function stampRollupProvenance(
   }
   for (const [k, v] of Object.entries(remaining)) lines.push(`${k}: ${v}`)
   const body = raw.slice(m[0].length)
-  fs.writeFileSync(noteAbs, `---\n${lines.join('\n')}\n---\n${body}`)
+  writeText(noteAbs, `---\n${lines.join('\n')}\n---\n${body}`)
 }
 
 /** Decide what a render should stamp back into a rollup note. Provenance

@@ -23,6 +23,7 @@ import { resolveRollupNote, provenanceStamp, stampRollupProvenance } from './rol
 import { renderTarget } from './render'
 import { extractSummaryLog } from './rollup'
 import { probeGitHubLinkBase } from './rollup-markdown'
+import { readText, writeText } from './eol' // Windows support: line endings
 
 const ROLLUPS_DIR = 'rollups'
 
@@ -82,7 +83,7 @@ export async function renderAndStampRollup(root: string, target: string): Promis
     const renderTargetArg = rollupNote.specPath ?? rollupNote.noteRel
     // Carry the prior artifact's change-summary history forward untouched —
     // a deterministic refresh adds no new "What changed" entry.
-    const priorContent = fs.existsSync(absOut) ? fs.readFileSync(absOut, 'utf8') : ''
+    const priorContent = fs.existsSync(absOut) ? readText(absOut) : ''
     const summaryLog = extractSummaryLog(priorContent)
     // R8 — `links: github` notes get blob-URL entity links; probe failure
     // (no repo / non-GitHub remote) degrades to relative links — reported
@@ -97,7 +98,7 @@ export async function renderAndStampRollup(root: string, target: string): Promis
       github,
     })
     fs.mkdirSync(path.dirname(absOut), { recursive: true })
-    fs.writeFileSync(absOut, format === 'html' ? result.html : result.md)
+    writeText(absOut, format === 'html' ? result.html : result.md)
 
     let stamped = false
     const stamp = provenanceStamp(rollupNote, {

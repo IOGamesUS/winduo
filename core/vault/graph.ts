@@ -4,10 +4,10 @@
 // whose basename is `Foo`. This is what makes file moves non-breaking
 // (D20: "wikilinks survive moves, basename-resolved").
 
-import fs from 'node:fs'
 import path from 'node:path'
 import { walk, readNotes } from './parse'
 import { extractLinkRefs, targetKey } from '../markdown/vaultLinks'
+import { readText } from './eol' // Windows support: line endings
 
 export interface Backlink {
   /** Linking note, relative to the vault root. */
@@ -31,7 +31,7 @@ export function backlinks(root: string, noteName: string): Backlink[] {
   for (const abs of walk(root).filter((p) => p.endsWith('.md'))) {
     let raw: string
     try {
-      raw = fs.readFileSync(abs, 'utf8')
+      raw = readText(abs)
     } catch {
       continue
     }

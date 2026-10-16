@@ -1,0 +1,15 @@
+# Windows support: check out every text file with LF line endings on every
+# machine, so the code and test fixtures are byte-identical on macOS, Linux
+# and Windows (git for Windows otherwise converts to CRLF on checkout).
+# Duo itself still reads users' own CRLF files correctly (core/vault/eol.ts).
+* text=auto eol=lf
+
+# Binary assets (explicit, so text=auto never guesses wrong).
+*.png binary
+*.icns binary
+*.ico binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

@@ -16,6 +16,7 @@ import type { VaultInfo, VaultMode } from './types'
 import { splitFrontmatter } from './parse'
 import { OKF_INDEX_FILENAMES } from './okf-filenames'
 import { OUTPUT_DIR_NAMES } from './output-dir'
+import { readText } from './eol' // Windows support: line endings
 
 /** Read the `okf_version` field from a vault root's index frontmatter (the
  *  OKF marker, D4 — the ROOT index ONLY). Checks `_index.md` then the legacy
@@ -30,7 +31,7 @@ export function readOkfVersion(dir: string): string | null {
   for (const name of OKF_INDEX_FILENAMES) {
     let raw: string
     try {
-      raw = fs.readFileSync(path.join(dir, name), 'utf8')
+      raw = readText(path.join(dir, name))
     } catch {
       continue
     }

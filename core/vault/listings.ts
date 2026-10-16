@@ -49,6 +49,7 @@ import {
   resolveLogFilename,
 } from './okf-filenames'
 import type { VaultFile, VaultMode } from './types'
+import { readText, writeText } from './eol' // Windows support: line endings
 
 // ── frontmatter readers (display/description) ─────────────────────────────────
 
@@ -277,13 +278,13 @@ function generatedStamp(root: string, kind: string, dateSource: string): string 
 function writeIfChanged(abs: string, content: string): boolean {
   let existing: string | null = null
   try {
-    existing = fs.readFileSync(abs, 'utf8')
+    existing = readText(abs)
   } catch {
     existing = null // not on disk yet → a genuine create
   }
   if (existing === content) return false
   fs.mkdirSync(path.dirname(abs), { recursive: true })
-  fs.writeFileSync(abs, content)
+  writeText(abs, content)
   return true
 }
 
@@ -359,7 +360,7 @@ export function writeListings(root: string, opts: WriteListingsOptions = {}): Wr
   // is identical to what's on disk, so a no-op `publish` writes nothing.
   if (wantIndex) {
     const rootIndexAbs = path.join(root, indexFilename)
-    const existing = fs.readFileSync(rootIndexAbs, 'utf8') // OKF root always has it
+    const existing = readText(rootIndexAbs) // OKF root always has it
     // ENH-230 — a `listing:` base spec in the frontmatter drives the body
     // through the shared engine; otherwise the group-by-type default (D3).
     const fm = splitFrontmatter(existing).frontmatter
@@ -510,10 +511,10 @@ export function promoteSection(
   const newBody = note.body.slice(0, section.start) + replacement + note.body.slice(section.end)
 
   // Reassemble the note: original frontmatter block (byte-preserved) + body.
-  const raw = fs.readFileSync(noteAbs, 'utf8')
+  const raw = readText(noteAbs)
   const fmMatch = raw.match(/^---\n[\s\S]*?\n---\n?/)
   const frontmatterBlock = fmMatch ? fmMatch[0] : ''
-  fs.writeFileSync(noteAbs, frontmatterBlock + newBody)
+  writeText(noteAbs, frontmatterBlock + newBody)
 
   return { entityRel: stub.path, leftLink, created: stub.created }
 }

@@ -14,6 +14,7 @@ import type { Corpus, TypeTemplate, VaultFile } from './types'
 import type { LinkRef } from '../markdown/vaultLinks'
 import { readNotes, splitFrontmatter } from './parse'
 import { extractLinkRefs, targetKey } from '../markdown/vaultLinks'
+import { readText } from './eol' // Windows support: line endings
 
 /** ENH-258 — the entity references the ENGINE folds to a `Link` (engine.ts
  *  `parseLinkish`): a wikilink, OR a rel-md link whose target is a `.md` note.
@@ -44,7 +45,7 @@ export function loadTemplates(root: string): TypeTemplate[] {
   const out: TypeTemplate[] = []
   for (const f of entries.sort()) {
     const abs = path.join(dir, f)
-    const raw = fs.readFileSync(abs, 'utf8')
+    const raw = readText(abs)
     const { frontmatter, body } = splitFrontmatter(raw)
     const type = typeof frontmatter.type === 'string' ? frontmatter.type : path.basename(f, '.md')
     const folder = typeof frontmatter.folder === 'string' ? frontmatter.folder : null

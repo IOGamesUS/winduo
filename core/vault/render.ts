@@ -33,6 +33,7 @@ import {
 } from './engine'
 import { isGeneratedListingBasename } from './okf-filenames'
 import { OUTPUT_DIR_NAMES } from './output-dir'
+import { readText, writeText } from './eol' // Windows support: line endings
 
 // ── structured evaluation ──────────────────────────────────────────────────
 
@@ -634,7 +635,7 @@ export function sourceHash(root: string): string {
         if (!SKIP.has(e.name)) stack.push(full)
       } else if ((e.name.endsWith('.md') || e.name.endsWith('.base')) && !isGeneratedListingBasename(e.name)) {
         try {
-          all.push(fs.readFileSync(full, 'utf8'))
+          all.push(readText(full))
         } catch {
           /* race */
         }
@@ -715,7 +716,7 @@ export function renderTarget(
 
   const abs = path.isAbsolute(target) ? target : path.resolve(root, target)
   if (target.endsWith('.base')) {
-    const def = yamlLoad(fs.readFileSync(abs, 'utf8')) as BaseDef
+    const def = yamlLoad(readText(abs)) as BaseDef
     const label = path.relative(root, abs).split(path.sep).join('/')
     const evaluated = evaluateBaseDef(def, files, null, asOf)
     bases.push({ label, evaluated, thisFile: null })

@@ -16,6 +16,7 @@ import { OUTPUT_DIR_DEFAULT } from './output-dir'
 import { seedObsidianAppJson } from './default-vault'
 import { yamlSafeScalar } from './yaml-safe'
 import type { TypeTemplate, VaultMode } from './types'
+import { writeText } from './eol' // Windows support: line endings
 
 const TB = '`'.repeat(3) // ``` — the markdown code fence
 
@@ -339,7 +340,7 @@ export function initVault(
     const abs = path.join(root, rel)
     if (fs.existsSync(abs) && !opts.force) return // never overwrite without --force
     fs.mkdirSync(path.dirname(abs), { recursive: true })
-    fs.writeFileSync(abs, content)
+    writeText(abs, content)
     created.push(rel)
   }
 
@@ -514,7 +515,7 @@ export function captureNote(
   fmLines.push('---', '')
   const body = opts.text ? opts.text + '\n' : ''
   fs.mkdirSync(path.dirname(abs), { recursive: true })
-  fs.writeFileSync(abs, fmLines.join('\n') + '\n' + body)
+  writeText(abs, fmLines.join('\n') + '\n' + body)
   // D10: mint + stamp a stable id on every OKF note at create time (the D5
   // primary relink key). `ensureNoteId` splices it into the just-written
   // frontmatter byte-preservingly. Obsidian captures stay id-free (unchanged).

@@ -41,6 +41,7 @@ import {
 import { detectVaultMode } from './detect'
 import { isGeneratedListingBasename } from './okf-filenames'
 import type { VaultFile } from './types'
+import { readText, writeText } from './eol' // Windows support: line endings
 
 // ── stable note id (D10) ─────────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ function insertIdLine(raw: string, id: string): string {
  *  to the note's enclosing directory's nearest corpus — pass it explicitly
  *  (the create path always knows the vault root) for a vault-wide check. */
 export function ensureNoteId(absPath: string, root?: string): string {
-  const raw = fs.readFileSync(absPath, 'utf8')
+  const raw = readText(absPath)
   const { frontmatter } = splitFrontmatter(raw)
   const existing = readNoteId(frontmatter)
   if (existing) return existing
@@ -117,7 +118,7 @@ export function ensureNoteId(absPath: string, root?: string): string {
   const taken = collectIds(vaultRoot)
   const seed = path.relative(vaultRoot, absPath) + '\n' + raw
   const id = mintId(seed, taken)
-  fs.writeFileSync(absPath, insertIdLine(raw, id))
+  writeText(absPath, insertIdLine(raw, id))
   return id
 }
 
@@ -301,7 +302,7 @@ export function moveNote(root: string, fromRel: string, toRel: string): MoveResu
     byLinker.get(b.fromAbs)!.push(b)
   }
   for (const [linkerAbs, hits] of byLinker) {
-    let raw = fs.readFileSync(linkerAbs, 'utf8')
+    let raw = readText(linkerAbs)
     const linkerRel = hits[0].fromRel
     const newHref = relLink(linkerRel, to)
     let total = 0
@@ -314,7 +315,7 @@ export function moveNote(root: string, fromRel: string, toRel: string): MoveResu
       total += r.count
     }
     if (total > 0) {
-      fs.writeFileSync(linkerAbs, raw)
+      writeText(linkerAbs, raw)
       inboundRewritten.push({ fromRel: linkerRel, count: total })
     }
   }
@@ -322,7 +323,7 @@ export function moveNote(root: string, fromRel: string, toRel: string): MoveResu
   // Re-base the moved note's own outbound links from its new directory.
   let outboundRebased = 0
   if (ownOutbound.length) {
-    let raw = fs.readFileSync(toAbs, 'utf8')
+    let raw = readText(toAbs)
     // Resolve each old href against the OLD source dir, then recompute against
     // the NEW source dir, and rewrite byte-anchored.
     const seen = new Set<string>()
@@ -338,7 +339,7 @@ export function moveNote(root: string, fromRel: string, toRel: string): MoveResu
       raw = r.text
       outboundRebased += r.count
     }
-    if (outboundRebased > 0) fs.writeFileSync(toAbs, raw)
+    if (outboundRebased > 0) writeText(toAbs, raw)
   }
 
   return { fromRel: from, toRel: to, inboundRewritten, outboundRebased }
@@ -472,14 +473,14 @@ export function relinkVault(root: string, opts: { dryRun?: boolean } = {}): Reli
 
   if (!opts.dryRun) {
     for (const { abs, ops } of edits.values()) {
-      let raw = fs.readFileSync(abs, 'utf8')
+      let raw = readText(abs)
       const seen = new Set<string>()
       for (const { oldHref, newHref } of ops) {
         if (seen.has(oldHref)) continue
         seen.add(oldHref)
         raw = rewriteHref(raw, oldHref, newHref).text
       }
-      fs.writeFileSync(abs, raw)
+      writeText(abs, raw)
     }
   }
 
@@ -786,7 +787,7 @@ export function migrateFrontmatterLinks(root: string, opts: { dryRun?: boolean }
     if (isGeneratedListingBasename(noteBasename)) continue
 
     const abs = note.absPath
-    const raw = fs.readFileSync(abs, 'utf8')
+    const raw = readText(abs)
     const spanEdits: SpanEdit[] = []
 
     // (a) + (b) — frontmatter value tokens.
@@ -882,7 +883,7 @@ export function migrateFrontmatterLinks(root: string, opts: { dryRun?: boolean }
     }
 
     if (spanEdits.length && !opts.dryRun) {
-      fs.writeFileSync(abs, applySpanEdits(raw, spanEdits))
+      writeText(abs, applySpanEdits(raw, spanEdits))
     }
   }
 

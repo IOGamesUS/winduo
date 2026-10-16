@@ -44,6 +44,7 @@ import {
 } from './render'
 import { buildEngineFiles, defaultAsOf, type EngineFile } from './engine'
 import { yamlSafeScalar } from './yaml-safe'
+import { readText, writeText } from './eol' // Windows support: line endings
 
 // ── the builder model ───────────────────────────────────────────────────────
 
@@ -400,7 +401,7 @@ export function createRollupNote(root: string, model: RollupBuilderModel): Creat
   let slug = stem
   for (let n = 2; fs.existsSync(path.join(dir, `${slug}.md`)); n++) slug = `${stem}-${n}`
   const abs = path.join(dir, `${slug}.md`)
-  fs.writeFileSync(abs, builderNoteContent(model, {}))
+  writeText(abs, builderNoteContent(model, {}))
   return { noteRel: `${ROLLUPS_DIR}/${slug}.md`, absPath: abs }
 }
 
@@ -410,8 +411,8 @@ export function createRollupNote(root: string, model: RollupBuilderModel): Creat
  *  rewritten. Content-only — never renames the file; {@link saveRollupNoteWithRename}
  *  is the rename-aware entry point every caller should use instead. */
 export function updateRollupNote(noteAbs: string, model: RollupBuilderModel): void {
-  const { frontmatter } = splitFrontmatter(fs.readFileSync(noteAbs, 'utf8'))
-  fs.writeFileSync(noteAbs, builderNoteContent(model, frontmatter))
+  const { frontmatter } = splitFrontmatter(readText(noteAbs))
+  writeText(noteAbs, builderNoteContent(model, frontmatter))
 }
 
 export interface SaveRollupResult {
@@ -474,7 +475,7 @@ export function saveRollupNoteWithRename(
 
   // Capture the OLD artifact pointer before the move (updateRollupNote below
   // preserves it via extraFm unless we surgically clear it afterward).
-  const { frontmatter } = splitFrontmatter(fs.readFileSync(noteAbs, 'utf8'))
+  const { frontmatter } = splitFrontmatter(readText(noteAbs))
   const oldOutRel = typeof frontmatter.out === 'string' ? frontmatter.out : null
 
   const fromRel = `${ROLLUPS_DIR}/${oldSlug}.md`
@@ -510,14 +511,14 @@ export function setFrontmatterFields(
 ): void {
   const serialize = (v: string | number | boolean): string =>
     typeof v === 'string' ? yamlScalar(v) : String(v)
-  const raw = fs.readFileSync(noteAbs, 'utf8')
+  const raw = readText(noteAbs)
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?/)
   if (!m) {
     const block = Object.entries(updates)
       .filter(([, v]) => v !== null)
       .map(([k, v]) => `${k}: ${serialize(v!)}`)
       .join('\n')
-    fs.writeFileSync(noteAbs, `---\n${block}\n---\n\n${raw}`)
+    writeText(noteAbs, `---\n${block}\n---\n\n${raw}`)
     return
   }
   const remaining: Record<string, string | number | boolean | null> = { ...updates }
@@ -537,7 +538,7 @@ export function setFrontmatterFields(
     if (v !== null) lines.push(`${k}: ${serialize(v)}`)
   }
   const body = raw.slice(m[0].length)
-  fs.writeFileSync(noteAbs, `---\n${lines.join('\n')}\n---\n${body}`)
+  writeText(noteAbs, `---\n${lines.join('\n')}\n---\n${body}`)
 }
 
 // ── the typed attribute panel (flip subpane data) ───────────────────────────
@@ -746,9 +747,9 @@ export function rollupViewData(root: string, target: string, asOf?: Date): Rollu
       const specAbs = path.isAbsolute(resolved.specPath)
         ? resolved.specPath
         : path.resolve(root, resolved.specPath)
-      specRaw = fs.readFileSync(specAbs, 'utf8')
+      specRaw = readText(specAbs)
     } else {
-      const body = fs.readFileSync(resolved.noteAbs, 'utf8')
+      const body = readText(resolved.noteAbs)
       const block = body.match(/```base\n([\s\S]*?)```/)
       specRaw = block ? block[1] : null
     }

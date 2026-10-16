@@ -26,7 +26,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var net = __toESM(require("net"));
 var os3 = __toESM(require("os"));
 var path21 = __toESM(require("path"));
-var fs19 = __toESM(require("fs"));
+var fs18 = __toESM(require("fs"));
 var import_crypto = require("crypto");
 
 // core/vault/parse.ts
@@ -2791,6 +2791,37 @@ function resolveOutputDir(root) {
   return OUTPUT_DIR_DEFAULT;
 }
 
+// core/vault/eol.ts
+var fs2 = __toESM(require("fs"));
+function toLf(text) {
+  return text.indexOf("\r") === -1 ? text : text.replace(/\r\n?/g, "\n");
+}
+function usesCrlf(text) {
+  const i = text.indexOf("\n");
+  return i > 0 && text[i - 1] === "\r";
+}
+function toCrlf(text) {
+  return toLf(text).replace(/\n/g, "\r\n");
+}
+function readText(abs) {
+  return toLf(fs2.readFileSync(abs, "utf8"));
+}
+function writeText(abs, text) {
+  let crlf = false;
+  try {
+    const fd = fs2.openSync(abs, "r");
+    try {
+      const buf = Buffer.alloc(4096);
+      const n = fs2.readSync(fd, buf, 0, buf.length, 0);
+      crlf = usesCrlf(buf.subarray(0, n).toString("utf8"));
+    } finally {
+      fs2.closeSync(fd);
+    }
+  } catch {
+  }
+  fs2.writeFileSync(abs, crlf ? toCrlf(text) : text);
+}
+
 // core/vault/parse.ts
 var SKIP_DIRS = /* @__PURE__ */ new Set([".obsidian", ".trash", ...OUTPUT_DIR_NAMES, "rollups", "templates"]);
 function walk(dir, skip = SKIP_DIRS) {
@@ -2824,7 +2855,7 @@ function splitFrontmatter(raw) {
   return { frontmatter: fm, body: raw.slice(m[0].length) };
 }
 function parseFile(absPath, root) {
-  const raw = import_node_fs2.default.readFileSync(absPath, "utf8");
+  const raw = readText(absPath);
   const { frontmatter, body } = splitFrontmatter(raw);
   const refs = extractLinkRefs(raw);
   const rel = import_node_path2.default.relative(root, absPath).split(import_node_path2.default.sep).join("/");
@@ -2909,7 +2940,7 @@ function readOkfVersion(dir) {
   for (const name of OKF_INDEX_FILENAMES) {
     let raw;
     try {
-      raw = import_node_fs4.default.readFileSync(import_node_path4.default.join(dir, name), "utf8");
+      raw = readText(import_node_path4.default.join(dir, name));
     } catch {
       continue;
     }
@@ -3030,7 +3061,7 @@ var DEFAULT_VAULT_FILE = import_node_path5.default.join(import_node_os.default.h
 function readPrefs(filePath) {
   let raw;
   try {
-    raw = import_node_fs5.default.readFileSync(filePath, "utf8");
+    raw = readText(filePath);
   } catch {
     return {};
   }
@@ -3056,7 +3087,7 @@ function writePrefs(prefs, filePath) {
   if (known.length > 0) out2.knownVaults = known;
   import_node_fs5.default.mkdirSync(import_node_path5.default.dirname(filePath), { recursive: true });
   const tmp = `${filePath}.${process.pid}.tmp`;
-  import_node_fs5.default.writeFileSync(tmp, JSON.stringify(out2, null, 2) + "\n");
+  writeText(tmp, JSON.stringify(out2, null, 2) + "\n");
   import_node_fs5.default.renameSync(tmp, filePath);
 }
 function readDefaultVault(filePath = DEFAULT_VAULT_FILE) {
@@ -3068,7 +3099,7 @@ function seedObsidianAppJson(vaultRoot) {
   const target = import_node_path5.default.join(vaultRoot, ".obsidian", "app.json");
   if (import_node_fs5.default.existsSync(target)) return false;
   import_node_fs5.default.mkdirSync(import_node_path5.default.dirname(target), { recursive: true });
-  import_node_fs5.default.writeFileSync(target, JSON.stringify(OBSIDIAN_APP_JSON, null, 2) + "\n");
+  writeText(target, JSON.stringify(OBSIDIAN_APP_JSON, null, 2) + "\n");
   return true;
 }
 function maybeSeedObsidianAppJson(vaultRoot) {
@@ -3151,7 +3182,7 @@ function loadTemplates(root) {
   const out2 = [];
   for (const f of entries.sort()) {
     const abs = import_node_path6.default.join(dir, f);
-    const raw = import_node_fs6.default.readFileSync(abs, "utf8");
+    const raw = readText(abs);
     const { frontmatter, body } = splitFrontmatter(raw);
     const type2 = typeof frontmatter.type === "string" ? frontmatter.type : import_node_path6.default.basename(f, ".md");
     const folder = typeof frontmatter.folder === "string" ? frontmatter.folder : null;
@@ -3300,7 +3331,6 @@ function parseBaseYaml(raw) {
 }
 
 // core/vault/graph.ts
-var import_node_fs7 = __toESM(require("node:fs"));
 var import_node_path7 = __toESM(require("node:path"));
 function backlinks(root, noteName) {
   const target = targetKey(noteName, "wikilink");
@@ -3308,7 +3338,7 @@ function backlinks(root, noteName) {
   for (const abs of walk(root).filter((p) => p.endsWith(".md"))) {
     let raw;
     try {
-      raw = import_node_fs7.default.readFileSync(abs, "utf8");
+      raw = readText(abs);
     } catch {
       continue;
     }
@@ -3341,7 +3371,6 @@ function orphans(root) {
 }
 
 // core/vault/search.ts
-var import_node_fs8 = __toESM(require("node:fs"));
 var import_node_path8 = __toESM(require("node:path"));
 var SEARCH_SKIP_DIRS = /* @__PURE__ */ new Set([".obsidian", ".trash", ...OUTPUT_DIR_NAMES]);
 function isTemplatePath(relPath) {
@@ -3395,7 +3424,7 @@ function search(root, query, limit = VAULT_SEARCH_DEFAULT_LIMIT) {
   for (const abs of walk(root, SEARCH_SKIP_DIRS).filter((p) => p.endsWith(".md")).sort()) {
     let raw;
     try {
-      raw = import_node_fs8.default.readFileSync(abs, "utf8");
+      raw = readText(abs);
     } catch {
       continue;
     }
@@ -3406,12 +3435,12 @@ function search(root, query, limit = VAULT_SEARCH_DEFAULT_LIMIT) {
 }
 
 // core/vault/scaffold.ts
-var import_node_fs10 = __toESM(require("node:fs"));
+var import_node_fs8 = __toESM(require("node:fs"));
 var import_node_path10 = __toESM(require("node:path"));
 var import_node_os2 = __toESM(require("node:os"));
 
 // core/vault/move.ts
-var import_node_fs9 = __toESM(require("node:fs"));
+var import_node_fs7 = __toESM(require("node:fs"));
 var import_node_path9 = __toESM(require("node:path"));
 function readNoteId(frontmatter) {
   const v = frontmatter.id;
@@ -3461,7 +3490,7 @@ id: ${id}
 ` + raw;
 }
 function ensureNoteId(absPath, root) {
-  const raw = import_node_fs9.default.readFileSync(absPath, "utf8");
+  const raw = readText(absPath);
   const { frontmatter } = splitFrontmatter(raw);
   const existing = readNoteId(frontmatter);
   if (existing) return existing;
@@ -3469,7 +3498,7 @@ function ensureNoteId(absPath, root) {
   const taken = collectIds(vaultRoot);
   const seed = import_node_path9.default.relative(vaultRoot, absPath) + "\n" + raw;
   const id = mintId(seed, taken);
-  import_node_fs9.default.writeFileSync(absPath, insertIdLine(raw, id));
+  writeText(absPath, insertIdLine(raw, id));
   return id;
 }
 function resolveHref(fromRel, rawHref) {
@@ -3546,17 +3575,17 @@ function moveNote(root, fromRel, toRel) {
   const to = normalizePosix(toRel);
   const fromAbs = import_node_path9.default.join(root, from);
   const toAbs = import_node_path9.default.join(root, to);
-  if (!import_node_fs9.default.existsSync(fromAbs)) throw new Error(`source note not found: ${from}`);
-  if (import_node_fs9.default.existsSync(toAbs)) throw new Error(`destination already exists: ${to} (move would clobber it)`);
+  if (!import_node_fs7.default.existsSync(fromAbs)) throw new Error(`source note not found: ${from}`);
+  if (import_node_fs7.default.existsSync(toAbs)) throw new Error(`destination already exists: ${to} (move would clobber it)`);
   const inbound = mdBacklinks(root, from);
   const movedNote = parseFile(fromAbs, root);
   const ownOutbound = extractLinkRefs(movedNote.body).filter((r) => r.syntax === "mdlink");
-  import_node_fs9.default.mkdirSync(import_node_path9.default.dirname(toAbs), { recursive: true });
-  import_node_fs9.default.renameSync(fromAbs, toAbs);
+  import_node_fs7.default.mkdirSync(import_node_path9.default.dirname(toAbs), { recursive: true });
+  import_node_fs7.default.renameSync(fromAbs, toAbs);
   const fromSidecar = fromAbs + ".duo.json";
-  if (import_node_fs9.default.existsSync(fromSidecar)) {
+  if (import_node_fs7.default.existsSync(fromSidecar)) {
     try {
-      import_node_fs9.default.renameSync(fromSidecar, toAbs + ".duo.json");
+      import_node_fs7.default.renameSync(fromSidecar, toAbs + ".duo.json");
     } catch {
     }
   }
@@ -3567,7 +3596,7 @@ function moveNote(root, fromRel, toRel) {
     byLinker.get(b.fromAbs).push(b);
   }
   for (const [linkerAbs, hits] of byLinker) {
-    let raw = import_node_fs9.default.readFileSync(linkerAbs, "utf8");
+    let raw = readText(linkerAbs);
     const linkerRel = hits[0].fromRel;
     const newHref = relLink(linkerRel, to);
     let total = 0;
@@ -3578,13 +3607,13 @@ function moveNote(root, fromRel, toRel) {
       total += r.count;
     }
     if (total > 0) {
-      import_node_fs9.default.writeFileSync(linkerAbs, raw);
+      writeText(linkerAbs, raw);
       inboundRewritten.push({ fromRel: linkerRel, count: total });
     }
   }
   let outboundRebased = 0;
   if (ownOutbound.length) {
-    let raw = import_node_fs9.default.readFileSync(toAbs, "utf8");
+    let raw = readText(toAbs);
     const seen = /* @__PURE__ */ new Set();
     for (const ref of ownOutbound) {
       const oldHref = ref.rawTarget.split("#")[0];
@@ -3598,7 +3627,7 @@ function moveNote(root, fromRel, toRel) {
       raw = r.text;
       outboundRebased += r.count;
     }
-    if (outboundRebased > 0) import_node_fs9.default.writeFileSync(toAbs, raw);
+    if (outboundRebased > 0) writeText(toAbs, raw);
   }
   return { fromRel: from, toRel: to, inboundRewritten, outboundRebased };
 }
@@ -3665,14 +3694,14 @@ function relinkVault(root, opts = {}) {
   }
   if (!opts.dryRun) {
     for (const { abs, ops } of edits.values()) {
-      let raw = import_node_fs9.default.readFileSync(abs, "utf8");
+      let raw = readText(abs);
       const seen = /* @__PURE__ */ new Set();
       for (const { oldHref, newHref } of ops) {
         if (seen.has(oldHref)) continue;
         seen.add(oldHref);
         raw = rewriteHref(raw, oldHref, newHref).text;
       }
-      import_node_fs9.default.writeFileSync(abs, raw);
+      writeText(abs, raw);
     }
   }
   return { repaired, ambiguous, broken };
@@ -3822,7 +3851,7 @@ function migrateFrontmatterLinks(root, opts = {}) {
     const noteBasename = note.relPath.includes("/") ? note.relPath.slice(note.relPath.lastIndexOf("/") + 1) : note.relPath;
     if (isGeneratedListingBasename(noteBasename)) continue;
     const abs = note.absPath;
-    const raw = import_node_fs9.default.readFileSync(abs, "utf8");
+    const raw = readText(abs);
     const spanEdits = [];
     for (const hit of scanFrontmatterValues(raw)) {
       const wiki = hit.inner.match(FM_WIKILINK_VALUE_RE);
@@ -3907,7 +3936,7 @@ function migrateFrontmatterLinks(root, opts = {}) {
       }
     }
     if (spanEdits.length && !opts.dryRun) {
-      import_node_fs9.default.writeFileSync(abs, applySpanEdits(raw, spanEdits));
+      writeText(abs, applySpanEdits(raw, spanEdits));
     }
   }
   return { frontmatterWikilinks, frontmatterBarePaths, bodyWikilinks, aliasBackfills };
@@ -4164,7 +4193,7 @@ function okfRootIndex(title) {
 function initVault(folder, opts = {}) {
   const mode = opts.format ?? "okf";
   const root = import_node_path10.default.resolve(folder);
-  if (import_node_fs10.default.existsSync(root) && !import_node_fs10.default.statSync(root).isDirectory()) {
+  if (import_node_fs8.default.existsSync(root) && !import_node_fs8.default.statSync(root).isDirectory()) {
     throw new Error(`${root} exists but is not a directory \u2014 cannot initialize a vault there.`);
   }
   if (isVaultRoot(root) && !opts.force) {
@@ -4173,7 +4202,7 @@ function initVault(folder, opts = {}) {
     );
   }
   if (mode === "okf" && !opts.force) {
-    const collision = OKF_INDEX_FILENAMES.find((name) => import_node_fs10.default.existsSync(import_node_path10.default.join(root, name)));
+    const collision = OKF_INDEX_FILENAMES.find((name) => import_node_fs8.default.existsSync(import_node_path10.default.join(root, name)));
     if (collision) {
       throw new Error(
         `${root} already contains a ${collision} file (not an OKF vault marker). Refusing to initialize an OKF vault here \u2014 it would shadow or overwrite your file. Pick an empty folder, choose Obsidian format, or pass --force to overwrite.`
@@ -4185,16 +4214,16 @@ function initVault(folder, opts = {}) {
   const title = opts.name ?? import_node_path10.default.basename(root);
   const mkdir = (rel) => {
     const abs = import_node_path10.default.join(root, rel);
-    if (!import_node_fs10.default.existsSync(abs)) {
-      import_node_fs10.default.mkdirSync(abs, { recursive: true });
+    if (!import_node_fs8.default.existsSync(abs)) {
+      import_node_fs8.default.mkdirSync(abs, { recursive: true });
       created.push(rel + "/");
     }
   };
   const writeFile = (rel, content) => {
     const abs = import_node_path10.default.join(root, rel);
-    if (import_node_fs10.default.existsSync(abs) && !opts.force) return;
-    import_node_fs10.default.mkdirSync(import_node_path10.default.dirname(abs), { recursive: true });
-    import_node_fs10.default.writeFileSync(abs, content);
+    if (import_node_fs8.default.existsSync(abs) && !opts.force) return;
+    import_node_fs8.default.mkdirSync(import_node_path10.default.dirname(abs), { recursive: true });
+    writeText(abs, content);
     created.push(rel);
   };
   if (mode === "obsidian") {
@@ -4260,7 +4289,7 @@ function captureNote(root, opts = {}) {
   const titlePart = opts.title ? " " + slugify(opts.title) : "";
   const base = `${stamp}${titlePart}`;
   let rel = import_node_path10.default.join("inbox", `${base}.md`);
-  for (let n = 2; import_node_fs10.default.existsSync(import_node_path10.default.join(root, rel)); n++) {
+  for (let n = 2; import_node_fs8.default.existsSync(import_node_path10.default.join(root, rel)); n++) {
     rel = import_node_path10.default.join("inbox", `${base} ${n}.md`);
   }
   const abs = import_node_path10.default.join(root, rel);
@@ -4280,14 +4309,14 @@ function captureNote(root, opts = {}) {
   }
   fmLines.push("---", "");
   const body = opts.text ? opts.text + "\n" : "";
-  import_node_fs10.default.mkdirSync(import_node_path10.default.dirname(abs), { recursive: true });
-  import_node_fs10.default.writeFileSync(abs, fmLines.join("\n") + "\n" + body);
+  import_node_fs8.default.mkdirSync(import_node_path10.default.dirname(abs), { recursive: true });
+  writeText(abs, fmLines.join("\n") + "\n" + body);
   if (mode === "okf") ensureNoteId(abs, root);
   return { path: rel, absPath: abs, type: type2 };
 }
 
 // core/vault/filing.ts
-var import_node_fs11 = __toESM(require("node:fs"));
+var import_node_fs9 = __toESM(require("node:fs"));
 var import_node_path11 = __toESM(require("node:path"));
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -4317,34 +4346,34 @@ function createEntityStub(root, type2, name, opts = {}) {
   const body = opts.body ? opts.body + "\n" : "";
   if (mode === "obsidian") {
     const abs2 = import_node_path11.default.join(root, rel);
-    if (import_node_fs11.default.existsSync(abs2)) {
+    if (import_node_fs9.default.existsSync(abs2)) {
       return { path: rel, absPath: abs2, type: type2, created: false };
     }
     const fm2 = ["---", ...seedFrontmatterLines(template), "---", ""];
-    import_node_fs11.default.mkdirSync(import_node_path11.default.dirname(abs2), { recursive: true });
-    import_node_fs11.default.writeFileSync(abs2, fm2.join("\n") + "\n" + body);
+    import_node_fs9.default.mkdirSync(import_node_path11.default.dirname(abs2), { recursive: true });
+    writeText(abs2, fm2.join("\n") + "\n" + body);
     return { path: rel, absPath: abs2, type: type2, created: true };
   }
   let target = rel;
-  if (import_node_fs11.default.existsSync(import_node_path11.default.join(root, target))) {
+  if (import_node_fs9.default.existsSync(import_node_path11.default.join(root, target))) {
     const dot = rel.lastIndexOf(".");
     const stemPath = dot >= 0 ? rel.slice(0, dot) : rel;
     const ext = dot >= 0 ? rel.slice(dot) : "";
-    for (let n = 2; import_node_fs11.default.existsSync(import_node_path11.default.join(root, target)); n++) {
+    for (let n = 2; import_node_fs9.default.existsSync(import_node_path11.default.join(root, target)); n++) {
       target = `${stemPath}-${n}${ext}`;
     }
   }
   const abs = import_node_path11.default.join(root, target);
   const stem = import_node_path11.default.basename(target, import_node_path11.default.extname(target));
   const fm = ["---", ...seedFrontmatterLines(template, { mode, title: name, stem }), "---", ""];
-  import_node_fs11.default.mkdirSync(import_node_path11.default.dirname(abs), { recursive: true });
-  import_node_fs11.default.writeFileSync(abs, fm.join("\n") + "\n" + body);
+  import_node_fs9.default.mkdirSync(import_node_path11.default.dirname(abs), { recursive: true });
+  writeText(abs, fm.join("\n") + "\n" + body);
   ensureNoteId(abs, root);
   return { path: target, absPath: abs, type: type2, created: true };
 }
 
 // core/vault/render.ts
-var import_node_fs15 = __toESM(require("node:fs"));
+var import_node_fs13 = __toESM(require("node:fs"));
 var import_node_path15 = __toESM(require("node:path"));
 var import_node_crypto = __toESM(require("node:crypto"));
 
@@ -5021,7 +5050,7 @@ function assembleMarkdownPage(sections, meta) {
 }
 
 // core/vault/rollup-markdown.ts
-var import_node_fs14 = __toESM(require("node:fs"));
+var import_node_fs12 = __toESM(require("node:fs"));
 var import_node_path14 = __toESM(require("node:path"));
 
 // core/git/exec.ts
@@ -5077,7 +5106,7 @@ async function execGit(bin, args, opts = {}) {
 
 // core/git/worktree.ts
 var path13 = __toESM(require("path"));
-var fs12 = __toESM(require("fs"));
+var fs11 = __toESM(require("fs"));
 
 // shared/projects.ts
 var NUM_PROJECT_COLORS = 6;
@@ -5200,7 +5229,7 @@ var WORKTREES_SUBDIR = ".claude/worktrees";
 var BRANCH_PREFIX = "claude/";
 function dirExistsSafe(p) {
   try {
-    return fs12.existsSync(p);
+    return fs11.existsSync(p);
   } catch {
     return false;
   }
@@ -5234,7 +5263,7 @@ async function createWorktree(repoCwd, opts) {
     fromRef = wts.find((w) => w.isMain)?.branch || "HEAD";
   }
   try {
-    fs12.mkdirSync(worktreesDir, { recursive: true });
+    fs11.mkdirSync(worktreesDir, { recursive: true });
   } catch {
   }
   const addRes = await execGit(
@@ -5370,11 +5399,11 @@ function composeGitHubUrl(opts) {
 }
 
 // core/vault/builder.ts
-var import_node_fs13 = __toESM(require("node:fs"));
+var import_node_fs11 = __toESM(require("node:fs"));
 var import_node_path13 = __toESM(require("node:path"));
 
 // core/vault/rollup-notes.ts
-var import_node_fs12 = __toESM(require("node:fs"));
+var import_node_fs10 = __toESM(require("node:fs"));
 var import_node_path12 = __toESM(require("node:path"));
 var ROLLUPS_DIR = "rollups";
 function asString(v) {
@@ -5398,7 +5427,7 @@ function listRollups(root) {
   const dir = import_node_path12.default.join(root, ROLLUPS_DIR);
   let names;
   try {
-    names = import_node_fs12.default.readdirSync(dir).filter((f) => f.endsWith(".md"));
+    names = import_node_fs10.default.readdirSync(dir).filter((f) => f.endsWith(".md"));
   } catch {
     return [];
   }
@@ -5438,13 +5467,13 @@ function resolveRollupNote(root, target) {
   if (!target.endsWith(".md") && !target.endsWith(".base")) candidates.push(`${direct}.md`);
   let abs = null;
   for (const c of candidates) {
-    if (import_node_fs12.default.existsSync(c) && import_node_fs12.default.statSync(c).isFile()) {
+    if (import_node_fs10.default.existsSync(c) && import_node_fs10.default.statSync(c).isFile()) {
       abs = c;
       break;
     }
   }
   if (!abs) return null;
-  const { frontmatter } = splitFrontmatter(import_node_fs12.default.readFileSync(abs, "utf8"));
+  const { frontmatter } = splitFrontmatter(readText(abs));
   if (frontmatter.type !== "rollup") return null;
   const outRel = asString(frontmatter.out);
   return {
@@ -5465,12 +5494,12 @@ function deleteRollup(root, target) {
   const deleted = [];
   try {
     const artifactRel = containedOut(resolved.outRel, root);
-    import_node_fs12.default.rmSync(resolved.noteAbs);
+    import_node_fs10.default.rmSync(resolved.noteAbs);
     deleted.push(resolved.noteRel);
     if (artifactRel) {
       const artifactAbs = import_node_path12.default.resolve(root, artifactRel);
-      if (import_node_fs12.default.existsSync(artifactAbs)) {
-        import_node_fs12.default.rmSync(artifactAbs);
+      if (import_node_fs10.default.existsSync(artifactAbs)) {
+        import_node_fs10.default.rmSync(artifactAbs);
         deleted.push(artifactRel);
       }
     }
@@ -5486,10 +5515,10 @@ function duplicateRollup(root, target) {
     const dir = import_node_path12.default.join(root, ROLLUPS_DIR);
     const stem = `${resolved.slug}-copy`;
     let slug = stem;
-    for (let n = 2; import_node_fs12.default.existsSync(import_node_path12.default.join(dir, `${slug}.md`)); n++) slug = `${stem}-${n}`;
-    const raw = import_node_fs12.default.readFileSync(resolved.noteAbs, "utf8");
+    for (let n = 2; import_node_fs10.default.existsSync(import_node_path12.default.join(dir, `${slug}.md`)); n++) slug = `${stem}-${n}`;
+    const raw = readText(resolved.noteAbs);
     const abs = import_node_path12.default.join(dir, `${slug}.md`);
-    import_node_fs12.default.writeFileSync(abs, raw);
+    writeText(abs, raw);
     editFrontmatterLines(abs, {
       title: yamlScalar(`${resolved.title} (copy)`),
       out: null,
@@ -5505,7 +5534,7 @@ function yamlScalar(v) {
   return JSON.stringify(v);
 }
 function editFrontmatterLines(noteAbs, updates) {
-  const raw = import_node_fs12.default.readFileSync(noteAbs, "utf8");
+  const raw = readText(noteAbs);
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?/);
   if (!m) return;
   const remaining = { ...updates };
@@ -5523,7 +5552,7 @@ function editFrontmatterLines(noteAbs, updates) {
   }
   for (const [k, v] of Object.entries(remaining)) if (v !== null) lines.push(`${k}: ${v}`);
   const body = raw.slice(m[0].length);
-  import_node_fs12.default.writeFileSync(noteAbs, `---
+  writeText(noteAbs, `---
 ${lines.join("\n")}
 ---
 ${body}`);
@@ -5534,11 +5563,11 @@ function stampRollupProvenance(noteAbs, fields) {
     last_hash: yamlScalar(fields.last_hash),
     out: yamlScalar(fields.out)
   };
-  const raw = import_node_fs12.default.readFileSync(noteAbs, "utf8");
+  const raw = readText(noteAbs);
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?/);
   if (!m) {
     const block = Object.entries(updates).map(([k, v]) => `${k}: ${v}`).join("\n");
-    import_node_fs12.default.writeFileSync(noteAbs, `---
+    writeText(noteAbs, `---
 ${block}
 ---
 
@@ -5556,7 +5585,7 @@ ${raw}`);
   }
   for (const [k, v] of Object.entries(remaining)) lines.push(`${k}: ${v}`);
   const body = raw.slice(m[0].length);
-  import_node_fs12.default.writeFileSync(noteAbs, `---
+  writeText(noteAbs, `---
 ${lines.join("\n")}
 ---
 ${body}`);
@@ -5789,17 +5818,17 @@ function rollupStem(title) {
 }
 function createRollupNote(root, model) {
   const dir = import_node_path13.default.join(root, ROLLUPS_DIR2);
-  import_node_fs13.default.mkdirSync(dir, { recursive: true });
+  import_node_fs11.default.mkdirSync(dir, { recursive: true });
   const stem = rollupStem(model.title);
   let slug = stem;
-  for (let n = 2; import_node_fs13.default.existsSync(import_node_path13.default.join(dir, `${slug}.md`)); n++) slug = `${stem}-${n}`;
+  for (let n = 2; import_node_fs11.default.existsSync(import_node_path13.default.join(dir, `${slug}.md`)); n++) slug = `${stem}-${n}`;
   const abs = import_node_path13.default.join(dir, `${slug}.md`);
-  import_node_fs13.default.writeFileSync(abs, builderNoteContent(model, {}));
+  writeText(abs, builderNoteContent(model, {}));
   return { noteRel: `${ROLLUPS_DIR2}/${slug}.md`, absPath: abs };
 }
 function updateRollupNote(noteAbs, model) {
-  const { frontmatter } = splitFrontmatter(import_node_fs13.default.readFileSync(noteAbs, "utf8"));
-  import_node_fs13.default.writeFileSync(noteAbs, builderNoteContent(model, frontmatter));
+  const { frontmatter } = splitFrontmatter(readText(noteAbs));
+  writeText(noteAbs, builderNoteContent(model, frontmatter));
 }
 function saveRollupNoteWithRename(root, noteAbs, model) {
   const dir = import_node_path13.default.join(root, ROLLUPS_DIR2);
@@ -5810,7 +5839,7 @@ function saveRollupNoteWithRename(root, noteAbs, model) {
     return { ok: true, noteRel: `${ROLLUPS_DIR2}/${oldSlug}.md`, absPath: noteAbs, renamed: false };
   }
   const toAbs = import_node_path13.default.join(dir, `${newSlug}.md`);
-  if (import_node_fs13.default.existsSync(toAbs)) {
+  if (import_node_fs11.default.existsSync(toAbs)) {
     return {
       ok: false,
       noteRel: `${ROLLUPS_DIR2}/${oldSlug}.md`,
@@ -5819,7 +5848,7 @@ function saveRollupNoteWithRename(root, noteAbs, model) {
       error: `A rollup named "${model.title}" already exists.`
     };
   }
-  const { frontmatter } = splitFrontmatter(import_node_fs13.default.readFileSync(noteAbs, "utf8"));
+  const { frontmatter } = splitFrontmatter(readText(noteAbs));
   const oldOutRel = typeof frontmatter.out === "string" ? frontmatter.out : null;
   const fromRel = `${ROLLUPS_DIR2}/${oldSlug}.md`;
   const toRel = `${ROLLUPS_DIR2}/${newSlug}.md`;
@@ -5830,7 +5859,7 @@ function saveRollupNoteWithRename(root, noteAbs, model) {
     const rootAbs = import_node_path13.default.resolve(root);
     if (oldOutAbs === rootAbs || oldOutAbs.startsWith(rootAbs + import_node_path13.default.sep)) {
       try {
-        import_node_fs13.default.unlinkSync(oldOutAbs);
+        import_node_fs11.default.unlinkSync(oldOutAbs);
       } catch {
       }
     }
@@ -5840,11 +5869,11 @@ function saveRollupNoteWithRename(root, noteAbs, model) {
 }
 function setFrontmatterFields(noteAbs, updates) {
   const serialize = (v) => typeof v === "string" ? yamlScalar2(v) : String(v);
-  const raw = import_node_fs13.default.readFileSync(noteAbs, "utf8");
+  const raw = readText(noteAbs);
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?/);
   if (!m) {
     const block = Object.entries(updates).filter(([, v]) => v !== null).map(([k, v]) => `${k}: ${serialize(v)}`).join("\n");
-    import_node_fs13.default.writeFileSync(noteAbs, `---
+    writeText(noteAbs, `---
 ${block}
 ---
 
@@ -5868,7 +5897,7 @@ ${raw}`);
     if (v !== null) lines.push(`${k}: ${serialize(v)}`);
   }
   const body = raw.slice(m[0].length);
-  import_node_fs13.default.writeFileSync(noteAbs, `---
+  writeText(noteAbs, `---
 ${lines.join("\n")}
 ---
 ${body}`);
@@ -5928,9 +5957,9 @@ function rollupViewData(root, target, asOf) {
   try {
     if (resolved.specPath) {
       const specAbs = import_node_path13.default.isAbsolute(resolved.specPath) ? resolved.specPath : import_node_path13.default.resolve(root, resolved.specPath);
-      specRaw = import_node_fs13.default.readFileSync(specAbs, "utf8");
+      specRaw = readText(specAbs);
     } else {
-      const body = import_node_fs13.default.readFileSync(resolved.noteAbs, "utf8");
+      const body = readText(resolved.noteAbs);
       const block = body.match(/```base\n([\s\S]*?)```/);
       specRaw = block ? block[1] : null;
     }
@@ -5992,7 +6021,7 @@ async function probeGitHubLinkBase(root) {
     const base = {
       remote: remoteRes.stdout.trim(),
       branch: status.branch || status.head,
-      workTreeRootReal: (import_node_fs14.default.realpathSync.native ?? import_node_fs14.default.realpathSync)(status.workTreeRoot)
+      workTreeRootReal: (import_node_fs12.default.realpathSync.native ?? import_node_fs12.default.realpathSync)(status.workTreeRoot)
     };
     return gitHubBlobUrl(base, base.workTreeRootReal) === null ? null : base;
   } catch {
@@ -6002,7 +6031,7 @@ async function probeGitHubLinkBase(root) {
 function gitHubBlobUrl(base, absPath) {
   let absPathReal = absPath;
   try {
-    absPathReal = (import_node_fs14.default.realpathSync.native ?? import_node_fs14.default.realpathSync)(absPath);
+    absPathReal = (import_node_fs12.default.realpathSync.native ?? import_node_fs12.default.realpathSync)(absPath);
   } catch {
   }
   const relFromRepo = import_node_path14.default.relative(base.workTreeRootReal, absPathReal).split(import_node_path14.default.sep).join("/");
@@ -6335,7 +6364,7 @@ function sourceHash(root) {
     const dir = stack.pop();
     let entries;
     try {
-      entries = import_node_fs15.default.readdirSync(dir, { withFileTypes: true });
+      entries = import_node_fs13.default.readdirSync(dir, { withFileTypes: true });
     } catch {
       continue;
     }
@@ -6345,7 +6374,7 @@ function sourceHash(root) {
         if (!SKIP.has(e.name)) stack.push(full);
       } else if ((e.name.endsWith(".md") || e.name.endsWith(".base")) && !isGeneratedListingBasename(e.name)) {
         try {
-          all.push(import_node_fs15.default.readFileSync(full, "utf8"));
+          all.push(readText(full));
         } catch {
         }
       }
@@ -6392,7 +6421,7 @@ function renderTarget(root, target, opts = {}) {
   };
   const abs = import_node_path15.default.isAbsolute(target) ? target : import_node_path15.default.resolve(root, target);
   if (target.endsWith(".base")) {
-    const def = load(import_node_fs15.default.readFileSync(abs, "utf8"));
+    const def = load(readText(abs));
     const label = import_node_path15.default.relative(root, abs).split(import_node_path15.default.sep).join("/");
     const evaluated = evaluateBaseDef(def, files, null, asOf);
     bases.push({ label, evaluated, thisFile: null });
@@ -6401,7 +6430,7 @@ function renderTarget(root, target, opts = {}) {
     collect(evaluated, null);
   } else {
     let note;
-    if (import_node_fs15.default.existsSync(abs) && abs.endsWith(".md")) note = parseFile(abs, root);
+    if (import_node_fs13.default.existsSync(abs) && abs.endsWith(".md")) note = parseFile(abs, root);
     else note = notes.find((n) => n.basename === target.replace(/\.md$/, ""));
     if (!note) throw new Error(`render target not found: ${target} (expected a .base file or a note path/name)`);
     const thisFile = byName.get(note.basename) ?? null;
@@ -6538,7 +6567,7 @@ ${meta.rollup ? "<script>window.__rollupMd = " + JSON.stringify(meta.markdownSou
 }
 
 // core/vault/lint.ts
-var import_node_fs16 = __toESM(require("node:fs"));
+var import_node_fs14 = __toESM(require("node:fs"));
 var import_node_path16 = __toESM(require("node:path"));
 function lev(a, b) {
   const m = a.length;
@@ -6750,7 +6779,7 @@ function lintVault(root, target) {
     const rel = import_node_path16.default.relative(root, abs).split(import_node_path16.default.sep).join("/");
     let def;
     try {
-      def = load(import_node_fs16.default.readFileSync(abs, "utf8"));
+      def = load(readText(abs));
     } catch (e) {
       results.push({ source: rel, findings: [], parseError: e instanceof Error ? e.message : String(e) });
       return;
@@ -6780,7 +6809,7 @@ function lintVault(root, target) {
       lintBaseFile(abs);
     } else {
       const notes = readNotes(root);
-      const note = import_node_fs16.default.existsSync(abs) && abs.endsWith(".md") ? notes.find((n) => n.absPath === abs) : notes.find((n) => n.basename === target.replace(/\.md$/, ""));
+      const note = import_node_fs14.default.existsSync(abs) && abs.endsWith(".md") ? notes.find((n) => n.absPath === abs) : notes.find((n) => n.basename === target.replace(/\.md$/, ""));
       if (!note) throw new Error(`lint target not found: ${target} (expected --all, a .base file, or a note path/name)`);
       lintNoteEmbeds(note.relPath, note.basename, note.body);
     }
@@ -6789,7 +6818,7 @@ function lintVault(root, target) {
 }
 
 // core/vault/listings.ts
-var import_node_fs17 = __toESM(require("node:fs"));
+var import_node_fs15 = __toESM(require("node:fs"));
 var import_node_path17 = __toESM(require("node:path"));
 function noteTitle(note) {
   const t = note.frontmatter.title;
@@ -6907,13 +6936,13 @@ function generatedStamp(root, kind, dateSource) {
 function writeIfChanged(abs, content) {
   let existing = null;
   try {
-    existing = import_node_fs17.default.readFileSync(abs, "utf8");
+    existing = readText(abs);
   } catch {
     existing = null;
   }
   if (existing === content) return false;
-  import_node_fs17.default.mkdirSync(import_node_path17.default.dirname(abs), { recursive: true });
-  import_node_fs17.default.writeFileSync(abs, content);
+  import_node_fs15.default.mkdirSync(import_node_path17.default.dirname(abs), { recursive: true });
+  writeText(abs, content);
   return true;
 }
 function spliceRootIndex(existingRaw, stamp, body) {
@@ -6948,7 +6977,7 @@ function writeListings(root, opts = {}) {
   const indexFilename = resolveIndexFilename(root);
   if (wantIndex) {
     const rootIndexAbs = import_node_path17.default.join(root, indexFilename);
-    const existing = import_node_fs17.default.readFileSync(rootIndexAbs, "utf8");
+    const existing = readText(rootIndexAbs);
     const fm = splitFrontmatter(existing).frontmatter;
     const indexBody = engineIndexBody(root, fm, (reason) => warnings.push(reason)) ?? generateIndex(root, "", indexFilename);
     const indexStamp = generatedStamp(root, "index", "corpus");
@@ -7040,10 +7069,10 @@ function promoteSection(root, noteRel, heading, type2) {
 Moved to ${leftLink}
 `;
   const newBody = note.body.slice(0, section.start) + replacement + note.body.slice(section.end);
-  const raw = import_node_fs17.default.readFileSync(noteAbs, "utf8");
+  const raw = readText(noteAbs);
   const fmMatch = raw.match(/^---\n[\s\S]*?\n---\n?/);
   const frontmatterBlock = fmMatch ? fmMatch[0] : "";
-  import_node_fs17.default.writeFileSync(noteAbs, frontmatterBlock + newBody);
+  writeText(noteAbs, frontmatterBlock + newBody);
   return { entityRel: stub.path, leftLink, created: stub.created };
 }
 
@@ -7682,7 +7711,7 @@ var PER_CMD_TIMEOUT_MS = {
 };
 function readPortFile() {
   try {
-    const raw = fs19.readFileSync(PORT_FILE, "utf8");
+    const raw = fs18.readFileSync(PORT_FILE, "utf8");
     const parsed = JSON.parse(raw);
     if (typeof parsed.port === "number" && typeof parsed.token === "string") {
       return { port: parsed.port, token: parsed.token };
@@ -7748,7 +7777,7 @@ var FALLBACK_CONNECT_CODES = /* @__PURE__ */ new Set([
 ]);
 async function send(cmd, args = {}, opts = {}) {
   const timeoutMs = opts.timeoutMs ?? PER_CMD_TIMEOUT_MS[cmd] ?? TIMEOUT_MS;
-  if (process.env.DUO_TCP_ONLY !== "1" && fs19.existsSync(SOCKET_PATH)) {
+  if (process.env.DUO_TCP_ONLY !== "1" && fs18.existsSync(SOCKET_PATH)) {
     try {
       return await sendOver(
         () => ({ socket: net.createConnection(SOCKET_PATH) }),
@@ -7763,7 +7792,7 @@ async function send(cmd, args = {}, opts = {}) {
   }
   const portInfo = readPortFile();
   if (!portInfo) {
-    if (!fs19.existsSync(SOCKET_PATH)) {
+    if (!fs18.existsSync(SOCKET_PATH)) {
       die("Cannot connect: Duo app is not running.\nLaunch Duo.app first.");
     }
     die("Cannot connect: Unix socket failed and no TCP fallback available.\nRun `duo doctor` for details.");
@@ -7780,7 +7809,7 @@ async function send(cmd, args = {}, opts = {}) {
 }
 function sendStreamed(cmd, args, onAck, onEvent) {
   const factory = () => {
-    if (process.env.DUO_TCP_ONLY !== "1" && fs19.existsSync(SOCKET_PATH)) {
+    if (process.env.DUO_TCP_ONLY !== "1" && fs18.existsSync(SOCKET_PATH)) {
       return { socket: net.createConnection(SOCKET_PATH) };
     }
     const portInfo = readPortFile();
@@ -8121,7 +8150,7 @@ async function main() {
         const b64 = await send("screenshot", { selector });
         if (outputPath) {
           const abs = path21.resolve(outputPath);
-          fs19.writeFileSync(abs, Buffer.from(b64, "base64"));
+          fs18.writeFileSync(abs, Buffer.from(b64, "base64"));
           out(`Saved to ${abs}`);
         } else {
           out(b64);
@@ -8502,7 +8531,7 @@ To confirm, re-run:
         } else if (sub === "conflict-log") {
           const logPath = path21.join(os3.homedir(), ".claude", "duo", "logs", "last-conflict.log");
           try {
-            const raw = fs19.readFileSync(logPath, "utf8");
+            const raw = fs18.readFileSync(logPath, "utf8");
             process.stdout.write(raw);
             if (!raw.endsWith("\n")) process.stdout.write("\n");
           } catch (err) {
@@ -8937,7 +8966,7 @@ To confirm, re-run:
           const resolvedPatch = resolveFilePath(patchPath);
           let mergeJson;
           try {
-            mergeJson = fs19.readFileSync(resolvedPatch, "utf8");
+            mergeJson = fs18.readFileSync(resolvedPatch, "utf8");
           } catch (err) {
             die(`Could not read patch file ${resolvedPatch}: ${err?.message ?? err}`);
           }
@@ -9575,8 +9604,8 @@ ${res.pr.url}`);
           const filterWarnings = collectFilterWarnings(result);
           for (const w of filterWarnings) process.stderr.write(`duo base render: \u26A0 ${w}
 `);
-          fs19.mkdirSync(path21.dirname(outPath), { recursive: true });
-          fs19.writeFileSync(outPath, result.html);
+          fs18.mkdirSync(path21.dirname(outPath), { recursive: true });
+          fs18.writeFileSync(outPath, result.html);
           let opened = null;
           if (open) {
             try {
@@ -9616,7 +9645,7 @@ ${res.pr.url}`);
           let bestM = -1;
           for (const p of paths) {
             try {
-              const m = fs19.statSync(p).mtimeMs;
+              const m = fs18.statSync(p).mtimeMs;
               if (m > bestM) {
                 bestM = m;
                 best = p;
@@ -9657,7 +9686,7 @@ ${res.pr.url}`);
             if (/^[a-z][a-z0-9+.-]*:\/\//i.test(styleFlag))
               die("duo rollup render: --style takes a local CSS file path (remote URLs are not fetched)");
             try {
-              styleCss = fs19.readFileSync(path21.resolve(process.cwd(), styleFlag), "utf8");
+              styleCss = fs18.readFileSync(path21.resolve(process.cwd(), styleFlag), "utf8");
             } catch (e) {
               die(`duo rollup render: cannot read --style file ${styleFlag}: ${e instanceof Error ? e.message : String(e)}`);
             }
@@ -9668,7 +9697,7 @@ ${res.pr.url}`);
             die(`duo rollup render: --summary needs a text argument (got the flag "${summaryText}")`);
           const priorCandidates = outFlag ? [outPath] : [outPath, path21.join(root, "rollups", `${stem}.md`), path21.join(root, "rollups", `${stem}.html`)];
           const priorPath = newestExisting(priorCandidates);
-          const priorContent = priorPath ? fs19.readFileSync(priorPath, "utf8") : "";
+          const priorContent = priorPath ? fs18.readFileSync(priorPath, "utf8") : "";
           let summaryLog = noSummary ? [] : extractSummaryLog(priorContent);
           if (!noSummary && summaryText) {
             const today = new DuoDate(/* @__PURE__ */ new Date(), /* @__PURE__ */ new Date()).format("YYYY-MMM-DD");
@@ -9688,8 +9717,8 @@ ${res.pr.url}`);
           const filterWarnings = collectFilterWarnings(result);
           for (const w of filterWarnings) process.stderr.write(`duo rollup render: \u26A0 ${w}
 `);
-          fs19.mkdirSync(path21.dirname(outPath), { recursive: true });
-          fs19.writeFileSync(outPath, format === "html" ? result.html : result.md);
+          fs18.mkdirSync(path21.dirname(outPath), { recursive: true });
+          fs18.writeFileSync(outPath, format === "html" ? result.html : result.md);
           let stamped = false;
           if (rollupNote) {
             const stamp = provenanceStamp(rollupNote, {
@@ -9744,12 +9773,12 @@ ${res.pr.url}`);
           let priorPath;
           if (against) {
             priorPath = path21.resolve(process.cwd(), against);
-            if (!fs19.existsSync(priorPath))
+            if (!fs18.existsSync(priorPath))
               die(`duo rollup diff: --against path does not exist: ${priorPath} (resolved relative to cwd)`);
           } else {
             priorPath = newestExisting([path21.join(root, "rollups", `${stem}.md`), path21.join(root, "rollups", `${stem}.html`)]);
           }
-          const priorContent = priorPath ? fs19.readFileSync(priorPath, "utf8") : "";
+          const priorContent = priorPath ? fs18.readFileSync(priorPath, "utf8") : "";
           const prior = priorContent ? extractSnapshot(priorContent) : null;
           const current = renderTarget(root, target).snapshot;
           out({ priorArtifact: priorPath, diff: diffSnapshots(prior, current) });
@@ -9895,7 +9924,7 @@ ${res.pr.url}`);
           try {
             const resolved = resolveRollupNote(root, target);
             if (resolved && !resolved.specPath) {
-              const body = fs19.readFileSync(resolved.noteAbs, "utf8");
+              const body = fs18.readFileSync(resolved.noteAbs, "utf8");
               const block = body.match(/```base\n([\s\S]*?)```/);
               const def = block ? parseBaseYaml(block[1]) : null;
               if (def) lint = lintBaseDef(def, buildCorpus(root));
@@ -9991,7 +10020,7 @@ function resolveOpenTarget(target) {
   return "file://" + encoded;
 }
 function runInstall(opts = {}) {
-  const self = fs19.realpathSync(process.argv[1]);
+  const self = fs18.realpathSync(process.argv[1]);
   const targets = [];
   if (opts.system) {
     targets.push("/usr/local/bin/duo");
@@ -10001,12 +10030,12 @@ function runInstall(opts = {}) {
   }
   for (const target of targets) {
     try {
-      fs19.mkdirSync(path21.dirname(target), { recursive: true });
+      fs18.mkdirSync(path21.dirname(target), { recursive: true });
       try {
-        fs19.unlinkSync(target);
+        fs18.unlinkSync(target);
       } catch {
       }
-      fs19.symlinkSync(self, target);
+      fs18.symlinkSync(self, target);
       out(`Installed: ${target} \u2192 ${self}`);
       const dir = path21.dirname(target);
       const userPath = (process.env.PATH ?? "").split(":");
@@ -10034,7 +10063,7 @@ async function runDoctor() {
   let unixErr = null;
   let appVersion = null;
   let windowCount = null;
-  if (fs19.existsSync(SOCKET_PATH)) {
+  if (fs18.existsSync(SOCKET_PATH)) {
     try {
       const res = await probe(() => ({ socket: net.createConnection(SOCKET_PATH) }));
       unixOk = true;
@@ -10101,7 +10130,7 @@ async function runDoctor() {
   const cliPath = process.argv[1];
   let cliReal = null;
   try {
-    cliReal = fs19.realpathSync(cliPath);
+    cliReal = fs18.realpathSync(cliPath);
   } catch {
   }
   lines.push(`  CLI invoked as: ${cliPath}${cliReal && cliReal !== cliPath ? ` \u2192 ${cliReal}` : ""}`);
@@ -10116,10 +10145,10 @@ async function runDoctor() {
     "/usr/local/bin/duo"
   ];
   for (const t of knownInstallTargets) {
-    if (!fs19.existsSync(t)) continue;
+    if (!fs18.existsSync(t)) continue;
     let real = null;
     try {
-      real = fs19.realpathSync(t);
+      real = fs18.realpathSync(t);
     } catch {
     }
     const matches = real && cliReal && real === cliReal;
@@ -10129,8 +10158,8 @@ async function runDoctor() {
   lines.push("Skill");
   const skillFile = path21.join(os3.homedir(), ".claude", "skills", "duo", "SKILL.md");
   const agentFile = path21.join(os3.homedir(), ".claude", "agents", "duo.md");
-  lines.push(`  ${fs19.existsSync(skillFile) ? "\u2713" : "\u2717"} ${skillFile}`);
-  lines.push(`  ${fs19.existsSync(agentFile) ? "\u2713" : "\u2717"} ${agentFile}`);
+  lines.push(`  ${fs18.existsSync(skillFile) ? "\u2713" : "\u2717"} ${skillFile}`);
+  lines.push(`  ${fs18.existsSync(agentFile) ? "\u2713" : "\u2717"} ${agentFile}`);
   lines.push("");
   lines.push("Locale");
   const localeVars = ["LC_ALL", "LC_CTYPE", "LANG"];

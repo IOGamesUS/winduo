@@ -10,6 +10,7 @@
 //   relative paths, file:// URLs, paths with embedded `~`)
 
 import { describe, it, expect } from 'vitest'
+import * as path from 'path'
 import { expandTilde } from './path-utils'
 
 describe('expandTilde', () => {
@@ -20,11 +21,11 @@ describe('expandTilde', () => {
   })
 
   it('expands ~/path/to/file', () => {
-    expect(expandTilde('~/foo/bar.md', HOME)).toBe('/Users/test/foo/bar.md')
+    expect(expandTilde('~/foo/bar.md', HOME)).toBe(path.join(HOME, 'foo', 'bar.md')) // native separators
   })
 
   it('expands ~/ alone (preserves trailing semantics)', () => {
-    expect(expandTilde('~/', HOME)).toBe('/Users/test')
+    expect(expandTilde('~/', HOME)).toBe(path.join(HOME))
   })
 
   it('does NOT expand absolute paths', () => {

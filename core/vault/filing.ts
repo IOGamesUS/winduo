@@ -19,6 +19,7 @@ import { seedFrontmatterLines } from './scaffold'
 import { slugStem } from '../markdown/vaultLinks'
 import { ensureNoteId } from './move'
 import { detectVaultMode } from './detect'
+import { writeText } from './eol' // Windows support: line endings
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
@@ -95,7 +96,7 @@ export function createType(
   const abs = path.join(root, rel)
   if (!fs.existsSync(abs)) {
     fs.mkdirSync(path.dirname(abs), { recursive: true })
-    fs.writeFileSync(abs, `---\ntype: ${stem}\n---\n`)
+    writeText(abs, `---\ntype: ${stem}\n---\n`)
   }
   return { path: rel, type: stem }
 }
@@ -155,7 +156,7 @@ export function createEntityStub(
     }
     const fm = ['---', ...seedFrontmatterLines(template), '---', '']
     fs.mkdirSync(path.dirname(abs), { recursive: true })
-    fs.writeFileSync(abs, fm.join('\n') + '\n' + body)
+    writeText(abs, fm.join('\n') + '\n' + body)
     return { path: rel, absPath: abs, type, created: true }
   }
 
@@ -179,7 +180,7 @@ export function createEntityStub(
   const stem = path.basename(target, path.extname(target))
   const fm = ['---', ...seedFrontmatterLines(template, { mode, title: name, stem }), '---', '']
   fs.mkdirSync(path.dirname(abs), { recursive: true })
-  fs.writeFileSync(abs, fm.join('\n') + '\n' + body)
+  writeText(abs, fm.join('\n') + '\n' + body)
   // D10: mint + stamp a stable id (the D5 primary relink key). `ensureNoteId`
   // splices it into the just-written frontmatter byte-preservingly.
   ensureNoteId(abs, root)
