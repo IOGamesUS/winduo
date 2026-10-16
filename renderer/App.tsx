@@ -1,4 +1,5 @@
 import { shellEnter } from '../shared/shell-enter'
+import { usePaneLayout } from './hooks/usePaneLayout'
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { buildWikilinkCreatePath } from './wikilinkCreate'
 import { TabBar } from './components/TabBar'
@@ -451,6 +452,12 @@ export function App() {
   useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
 
   const [splitPct, setSplitPct] = useState(55)
+  // Winduo — 'stacked' puts the editor/browser pane above the terminal.
+  // splitPct keeps its meaning (the terminal's share) in both layouts.
+  const { paneLayout } = usePaneLayout()
+  const stacked = paneLayout === 'stacked'
+  const stackedRef = useRef(stacked)
+  useEffect(() => { stackedRef.current = stacked }, [stacked])
   // ENH-040 — prevSplitPct caches the last "real" split (clamped
   // 20–80) so collapse → restore returns the user to where they were
   // mid-conversation, not to the 55% default. Updated whenever
@@ -4189,15 +4196,19 @@ export function App() {
   const onDividerMouseDown = useCallback(() => {
     isDragging.current = true
     setIsDraggingSplit(true)
-    document.body.style.cursor = 'col-resize'
+    document.body.style.cursor = stackedRef.current ? 'row-resize' : 'col-resize'
     document.body.style.userSelect = 'none'
   }, [])
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!isDragging.current || !splitContainerRef.current) return
-      const { left, width } = splitContainerRef.current.getBoundingClientRect()
-      const pct = ((e.clientX - left) / width) * 100
+      const rect = splitContainerRef.current.getBoundingClientRect()
+      // Stacked: the terminal is the bottom pane, so its share is the
+      // distance from the pointer to the container's bottom edge.
+      const pct = stackedRef.current
+        ? ((rect.bottom - e.clientY) / rect.height) * 100
+        : ((e.clientX - rect.left) / rect.width) * 100
       setSplitPct(Math.min(Math.max(pct, 20), 80))
     }
     const onUp = () => {
@@ -5187,7 +5198,7 @@ export function App() {
 
         <div
           ref={splitContainerRef}
-          className="flex flex-1 overflow-hidden min-w-0"
+          className={['flex flex-1 overflow-hidden min-w-0', stacked ? 'flex-col min-h-0' : ''].join(' ')}
         >
           <div
             className={[
@@ -5216,17 +5227,22 @@ export function App() {
               // collapsed, terminal flips to flex-1 (no width prop);
               // canvas keeps its 36px rail. When terminal is collapsed,
               // canvas keeps flex-1 and terminal is the 36px rail.
-              'flex flex-col h-full bg-surface-1 border-r transition-colors min-w-0 overflow-hidden',
+              stacked
+                ? 'flex flex-col w-full bg-surface-1 border-t transition-colors min-h-0 overflow-hidden'
+                : 'flex flex-col h-full bg-surface-1 border-r transition-colors min-w-0 overflow-hidden',
               focusedColumn === 'terminal' ? 'border-accent' : 'border-border',
               isCanvasCollapsed ? 'flex-1' : ''
             ].join(' ')}
-            style={
-              isTerminalCollapsed
-                ? { width: '36px', flexShrink: 0 }
+            style={{
+              // Winduo — stacked: the terminal is the bottom pane (order 3)
+              // and splitPct is its height instead of its width.
+              ...(stacked ? { order: 3 } : {}),
+              ...(isTerminalCollapsed
+                ? { [stacked ? 'height' : 'width']: '36px', flexShrink: 0 }
                 : isCanvasCollapsed
-                  ? undefined
-                  : { width: `${splitPct}%`, flexShrink: 0 }
-            }
+                  ? {}
+                  : { [stacked ? 'height' : 'width']: `${splitPct}%`, flexShrink: 0 })
+            }}
             onMouseDown={() => setFocusedColumn('terminal')}
             onDragOver={(e) => {
               // ENH-207 — drop a navigator file/folder here to insert its path
@@ -5352,7 +5368,8 @@ export function App() {
           </div>
 
           <div
-            className={['split-divider', isDraggingSplit ? 'dragging' : ''].join(' ')}
+            className={['split-divider', stacked ? 'split-divider-h' : '', isDraggingSplit ? 'dragging' : ''].join(' ')}
+            style={stacked ? { order: 2 } : undefined}
             onMouseDown={onDividerMouseDown}
           >
             {/* ENH-190 — hover-reveal grip-pill affordance (shared with the
@@ -5367,7 +5384,7 @@ export function App() {
               matches VS Code / Figma's resize handles. */}
           {isDraggingSplit && (
             <div
-              className="fixed inset-0 z-50 cursor-col-resize"
+              className={['fixed inset-0 z-50', stacked ? 'cursor-row-resize' : 'cursor-col-resize'].join(' ')}
               aria-hidden="true"
             />
           )}
@@ -5384,10 +5401,16 @@ export function App() {
               // render a fixed-width CollapsedPaneRail INSTEAD of the
               // WorkingPane. The rail is a clickable vertical bar with a
               // canvas glyph; click restores the prior split.
-              isCanvasCollapsed ? 'overflow-hidden border-l transition-colors shrink-0' : 'flex-1 overflow-hidden border-l transition-colors min-w-0',
+              stacked
+                ? (isCanvasCollapsed ? 'overflow-hidden border-b transition-colors shrink-0' : 'flex-1 overflow-hidden border-b transition-colors min-h-0 min-w-0')
+                : (isCanvasCollapsed ? 'overflow-hidden border-l transition-colors shrink-0' : 'flex-1 overflow-hidden border-l transition-colors min-w-0'),
               focusedColumn === 'working' ? 'border-accent' : 'border-transparent'
             ].join(' ')}
-            style={isCanvasCollapsed ? { width: '36px' } : undefined}
+            style={{
+              // Winduo — stacked: the editor/browser pane is on top (order 1).
+              ...(stacked ? { order: 1 } : {}),
+              ...(isCanvasCollapsed ? { [stacked ? 'height' : 'width']: '36px' } : {})
+            }}
             onMouseDown={() => setFocusedColumn('working')}
             aria-label="Working pane"
             data-pane="working"

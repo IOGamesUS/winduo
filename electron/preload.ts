@@ -750,6 +750,13 @@ const api: ElectronAPI = {
       ipcRenderer.on(IPC.LAYOUT_3WAY_EVEN, handler)
       return () => ipcRenderer.removeListener(IPC.LAYOUT_3WAY_EVEN, handler)
     },
+    // Winduo — pane layout (side by side or stacked).
+    onPaneLayoutSet: (cb) => {
+      const handler = (_: IpcRendererEvent, mode: import('../shared/types').PaneLayout) => cb(mode)
+      ipcRenderer.on(IPC.PANE_LAYOUT_SET, handler)
+      return () => ipcRenderer.removeListener(IPC.PANE_LAYOUT_SET, handler)
+    },
+    pushPaneLayout: (mode) => ipcRenderer.send(IPC.PANE_LAYOUT_STATE, mode),
     // FOLLOWUP-015 — bridge for View → View source menu.
     // Payload-free; renderer fans out to the same window event the
     // ⌘⌥V chord uses.

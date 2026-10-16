@@ -343,6 +343,19 @@ html.dark {
     width: 12px;
     transform: translateX(-50%);
   }
+  /* Winduo — the divider between stacked panes (editor above terminal). */
+  .split-divider.split-divider-h {
+    @apply w-auto h-px cursor-row-resize;
+  }
+  .split-divider.split-divider-h::before {
+    top: 50%;
+    bottom: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 12px;
+    transform: translateY(-50%);
+  }
   .split-divider:hover,
   .split-divider.dragging {
     @apply bg-accent;

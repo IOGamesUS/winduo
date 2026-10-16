@@ -49,6 +49,9 @@ export interface DuoResponse {
   error?: string
 }
 
+/** Winduo — how the terminal and the editor/browser pane share the window. */
+export type PaneLayout = 'side' | 'stacked'
+
 export type DuoCommandName =
   | 'navigate'
   | 'open'
@@ -199,6 +202,7 @@ export type DuoCommandName =
   // ENH-099 — `duo split 3way` / `⌘⌥4` chord. Snaps to outer 33/67 +
   // inner aux 50/50 (when aux is open). On-demand sibling of ENH-126.
   | 'layout-3way-even'
+  | 'pane-layout'
   // ENH-123 — `duo devtools [--browser-pane] [--close]` opens the
   // renderer's DevTools (default) or the active browser pane's DevTools.
   // Backstop for the 5% of cases where ENH-122's targeted `duo dom`
@@ -2617,6 +2621,11 @@ export const IPC = {
   // applies the inner aux split only if aux is currently open; outer
   // gets the 33/67 either way.
   LAYOUT_3WAY_EVEN: 'layout:3way-even',
+  // Winduo — pane layout: side by side (terminal | editor) or stacked
+  // (editor above terminal). SET is main → renderer; STATE is renderer →
+  // main so the View menu checkbox and `duo pane-layout` can read it.
+  PANE_LAYOUT_SET: 'pane-layout:set',
+  PANE_LAYOUT_STATE: 'pane-layout:state',
 
   // FOLLOWUP-015 (ENH-117 v2) — View → View source menu fires this so
   // the same `'duo-view-source'` window-event path that ⌘⌥V uses also

@@ -379,6 +379,13 @@ const VERBS: VerbSpec[] = [
       'Set the split-pane percentage (terminal column as % of the split container; numeric clamps to 20–80). Presets: even (50), terminal-heavy (67), canvas-heavy (33), terminal (80), canvas (20), 3way (outer 33/67 + inner aux 50/50). Mirrors View → Pane size and ⌘⌥1/2/3/4/0/9.'
   },
   {
+    name: 'pane-layout',
+    group: 'Working pane & layout',
+    args: '[side|stacked|toggle]',
+    summary:
+      'Read or set how the terminal and the editor/browser pane share the window: side (side by side, the default) or stacked (editor/browser above the terminal, as in VS Code). No arg prints { mode }. Mirrors View > Stack Editor Above Terminal; remembered per window.'
+  },
+  {
     name: 'split-view',
     group: 'Working pane & layout',
     args: '<op> [args]',
@@ -1599,6 +1606,15 @@ async function main(): Promise<void> {
           break
         }
         die(`Unknown split-view sub-verb: ${sub}. Expected: open|open-browser|close|promote|resize|state`)
+      }
+      case 'pane-layout': {
+        // Winduo — side by side or stacked (editor above terminal).
+        const mode = rest[0]
+        if (mode !== undefined && mode !== 'side' && mode !== 'stacked' && mode !== 'toggle') {
+          die('Usage: duo pane-layout [side|stacked|toggle]')
+        }
+        out(await send('pane-layout', mode === undefined ? {} : { mode }))
+        break
       }
       case 'split': {
         // ENH-014 \u2014 `duo split <pct>` sets the split-pane percentage

@@ -546,6 +546,12 @@ export interface ElectronLayoutAPI {
    *  even, or `duo split 3way` requests the canonical 3-pane layout
    *  (outer 33/67 + inner aux 50/50 if aux is open). */
   onLayout3wayEven: (cb: () => void) => () => void
+  /** Winduo — fires when View > Stack Editor Above Terminal or
+   *  `duo pane-layout` changes the layout. */
+  onPaneLayoutSet?: (cb: (mode: import('./types').PaneLayout) => void) => () => void
+  /** Winduo — the renderer reports its layout (on boot and on change) so
+   *  main can show it in the menu and answer `duo pane-layout`. */
+  pushPaneLayout?: (mode: import('./types').PaneLayout) => void
   /** FOLLOWUP-015 — fires when View → View source menu is clicked.
    *  Renderer dispatches the existing `'duo-view-source'` window
    *  event so the same MarkdownEditor + PageTab listeners that handle

@@ -1623,6 +1623,8 @@ app.whenReady().then(async () => {
     // ENH-178 (Sprint 20) — browser-mode push (CLI → renderer echo).
     pushBrowserMode: pushBrowserMode,
     setSplit: setSplit,
+    getPaneLayout: () => getPaneLayout(cliDefaultWindowId()),
+    setPaneLayout: (mode) => setPaneLayout(mode, cliTargetWindowId ?? undefined),
     setLayout3wayEven: setLayout3wayEven,
     queryRendererDom: queryRendererDom,
     openDevTools: openDevToolsForTarget,
@@ -3992,6 +3994,15 @@ function installAppMenu(): void {
     {
       label: 'View',
       submenu: [
+        // Winduo — stacked layout (editor/browser above the terminal, as in
+        // VS Code). `duo pane-layout side|stacked|toggle` is the CLI parity.
+        {
+          label: 'Stack Editor Above Terminal',
+          type: 'checkbox',
+          checked: getPaneLayout(focusedWindowId()) === 'stacked',
+          click: () => { setPaneLayout('toggle', focusedWindowId()) }
+        },
+        { type: 'separator' },
         {
           id: cozyMenuItemId,
           label: 'Cozy mode — current tab',
@@ -5573,6 +5584,37 @@ export function setAuthor(author: string): { ok: boolean; error?: string } {
 // land here. Renderer clamps to the divider drag's 20–80 range; the
 // validator below mirrors that so an invalid CLI value errors at the
 // socket boundary instead of a silent clamp.
+// Winduo — pane layout per window. The renderer owns and persists it
+// (localStorage) and reports it here on boot and on every change.
+const paneLayoutByWindow = new Map<number, import('../shared/types').PaneLayout>()
+
+export function getPaneLayout(windowId?: number): import('../shared/types').PaneLayout {
+  const win = windowByIdOrPrimary(windowId)
+  return (win && paneLayoutByWindow.get(win.id)) ?? 'side'
+}
+
+export function setPaneLayout(
+  mode: import('../shared/types').PaneLayout | 'toggle',
+  windowId?: number
+): { ok: boolean; mode?: import('../shared/types').PaneLayout; error?: string } {
+  const win = windowByIdOrPrimary(windowId)
+  if (!win || win.isDestroyed()) return { ok: false, error: 'Duo window not ready' }
+  const next = mode === 'toggle' ? (getPaneLayout(win.id) === 'stacked' ? 'side' : 'stacked') : mode
+  paneLayoutByWindow.set(win.id, next)
+  win.webContents.send(IPC.PANE_LAYOUT_SET, next)
+  void rebuildAppMenu()
+  return { ok: true, mode: next }
+}
+
+ipcMain.on(IPC.PANE_LAYOUT_STATE, (event, mode: unknown) => {
+  if (mode !== 'side' && mode !== 'stacked') return
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+  if (paneLayoutByWindow.get(win.id) === mode) return
+  paneLayoutByWindow.set(win.id, mode)
+  void rebuildAppMenu()
+})
+
 export function setSplit(pct: number, windowId?: number): { ok: boolean; pct?: number; error?: string } {
   if (typeof pct !== 'number' || !Number.isFinite(pct)) {
     return { ok: false, error: 'split pct must be a finite number' }

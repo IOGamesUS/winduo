@@ -145,6 +145,9 @@ export interface NavBridge {
   /** ENH-099 — `duo split 3way` / `⌘⌥4` chord. Snaps to outer 33/67 +
    *  inner aux 50/50 (when aux is open). On-demand sibling of ENH-126. */
   setLayout3wayEven: () => { ok: boolean; error?: string }
+  /** Winduo — pane layout: read, or set side | stacked | toggle. */
+  getPaneLayout?: () => import('../shared/types').PaneLayout
+  setPaneLayout?: (mode: import('../shared/types').PaneLayout | 'toggle') => { ok: boolean; mode?: import('../shared/types').PaneLayout; error?: string }
   /** FOLLOWUP-020 — close the focused working-pane tab. Mirrors ⌘W
    *  on the working strip. Renderer applies the pinned-tab gate
    *  (uses dialog.confirm before unpinning). Returns { ok: true }
@@ -1776,6 +1779,21 @@ export class SocketServer {
           const setResult = this.nav.setSplit(pct)
           if (!setResult.ok) throw new Error(setResult.error ?? 'split set failed')
           result = { pct: setResult.pct }
+          break
+        }
+        case 'pane-layout': {
+          // Winduo — `duo pane-layout [side|stacked|toggle]`. Bare reads.
+          const mode = args['mode'] as string | undefined
+          if (mode === undefined) {
+            result = { mode: this.nav.getPaneLayout?.() ?? 'side' }
+          } else {
+            if (mode !== 'side' && mode !== 'stacked' && mode !== 'toggle') {
+              throw new Error("pane-layout value must be 'side', 'stacked' or 'toggle'")
+            }
+            const set = this.nav.setPaneLayout?.(mode)
+            if (!set?.ok) throw new Error(set?.error ?? 'pane-layout set failed')
+            result = { mode: set.mode }
+          }
           break
         }
         case 'layout-3way-even': {
