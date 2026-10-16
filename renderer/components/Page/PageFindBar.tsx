@@ -25,6 +25,7 @@ import {
   isHighlightSupported,
   type FindMatchRange
 } from './pageFind'
+import { primaryMod, otherMod } from '../../keyboard/globalShortcuts' // Windows support: Ctrl as Cmd
 
 interface Props {
   /** Live iframe element. Null when iframe hasn't mounted yet. */
@@ -117,19 +118,19 @@ export function PageFindBar({ iframe, open, onClose, reloadTick = 0 }: Props) {
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'f') {
+    if (primaryMod(e) && !e.shiftKey && !e.altKey && !otherMod(e) && e.key.toLowerCase() === 'f') {
       e.preventDefault()
       e.stopPropagation()
       inputRef.current?.select()
       return
     }
-    if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'f') {
+    if (primaryMod(e) && e.shiftKey && !e.altKey && !otherMod(e) && e.key.toLowerCase() === 'f') {
       e.preventDefault()
       e.stopPropagation()
       goPrev()
       return
     }
-    if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'g') {
+    if (primaryMod(e) && !e.shiftKey && !e.altKey && !otherMod(e) && e.key.toLowerCase() === 'g') {
       e.preventDefault()
       e.stopPropagation()
       goNext()

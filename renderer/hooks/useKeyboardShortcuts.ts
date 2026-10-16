@@ -17,13 +17,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { TabSession } from '@shared/types'
-import {
-  matchGlobalShortcut,
-  isInEditableSurface,
-  isInAnyTextInput,
-  isInFindBar,
-  type ShortcutId
-} from '../keyboard/globalShortcuts'
+import { matchGlobalShortcut, isInEditableSurface, isInAnyTextInput, isInFindBar, isInTerminal, type ShortcutId, primaryMod, otherMod } from '../keyboard/globalShortcuts'
 import { cycleNext } from '../keyboard/tabCycle'
 
 interface Options {
@@ -408,7 +402,7 @@ export function useKeyboardShortcuts(opts: Options) {
       // an INPUT or TEXTAREA, select its contents directly. Skip
       // contentEditable surfaces (TipTap, canvas) — those have their
       // own select-all paths.
-      if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.code === 'KeyA') {
+      if (primaryMod(e) && !otherMod(e) && !e.altKey && !e.shiftKey && e.code === 'KeyA') {
         const active = document.activeElement as HTMLElement | null
         if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
           e.preventDefault()
@@ -427,7 +421,9 @@ export function useKeyboardShortcuts(opts: Options) {
         // HERE — the bar can't defend itself with stopPropagation.
         // Only this document path can have find-bar focus; the
         // iframe/WCV forwarders' focus lives inside their surfaces.
-        inFindBar: isInFindBar(document)
+        inFindBar: isInFindBar(document),
+        // Windows support: Ctrl+letter in a terminal belongs to the shell.
+        inTerminal: isInTerminal(document)
       }
       const match = matchGlobalShortcut(e, ctx)
       if (!match) return

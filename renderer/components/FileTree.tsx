@@ -29,6 +29,7 @@ import type { NavigatorState, NavigatorActions } from '../hooks/useNavigator'
 import type { NavPinsApi } from '../hooks/useNavPins'
 import { DUO_FS_PATH_MIME, formatPathsForTerminal } from './dragPathPayload'
 import { PullModal } from './PullModal'
+import { primaryMod } from '../keyboard/globalShortcuts' // Windows support: Ctrl as Cmd
 
 /** Return the parent directory of an absolute POSIX-style path. */
 function parentDir(absPath: string): string {
@@ -1585,7 +1586,7 @@ function TreeNode({ entry, depth, state, actions, onOpenFile, onContextMenu, onR
       onRangeSelect(entry)
       return
     }
-    if (e.metaKey) {
+    if (primaryMod(e)) {
       actions.toggleSelection(entry.path, isFolder ? 'folder' : 'file')
       return
     }

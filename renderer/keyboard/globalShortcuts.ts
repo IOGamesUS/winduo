@@ -58,6 +58,13 @@ export interface FocusContext {
    *  from the find input. Optional — omitted means "not in a find
    *  bar". */
   inFindBar?: boolean
+  /** Windows support: true when focus is inside a terminal (xterm). On
+   *  Windows, plain Ctrl+letter there belongs to the shell / Claude Code
+   *  (Ctrl+C, Ctrl+R, Ctrl+W, ...), so app shortcuts use Ctrl+Shift. */
+  inTerminal?: boolean
+  /** Windows support: the platform to match for. Omitted means the
+   *  renderer's platform (window.electron.env.platform), else macOS. */
+  platform?: string
 }
 
 /** A typed registry of every global shortcut. Adding a row gives every
@@ -211,8 +218,63 @@ export interface ShortcutMatch {
  * Order matters — the first match wins. Specific combos before
  * generic ones (e.g. ⌘⇧T before ⌘T).
  */
+/** The parts of a keyboard event the matcher reads. */
+export type ShortcutKeyEvent = Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'key' | 'code'>
+
+function rendererPlatform(): string | undefined {
+  const w = (globalThis as { window?: { electron?: { env?: { platform?: string } } } }).window
+  return w?.electron?.env?.platform
+}
+
+/** Keys a terminal's shell or Claude Code reads as Ctrl+key: letters and
+ *  the control-character punctuation. Digits, =, -, ` and Tab stay app
+ *  shortcuts in the terminal (tab jumps, text size, pane focus). */
+function isTerminalControlKey(e: ShortcutKeyEvent): boolean {
+  return /^Key[A-Z]$/.test(e.code) || e.code === 'BracketLeft' || e.code === 'BracketRight' || e.code === 'Backslash'
+}
+
+/**
+ * Windows support: the shortcut table is written in Mac terms (Cmd =
+ * metaKey). On Windows, Ctrl plays Cmd's part (the Windows key is never a
+ * Duo modifier), except:
+ *   - Ctrl+Tab / Ctrl+Shift+Tab keep their meaning (tab cycling), and
+ *   - with focus in a terminal, plain Ctrl+letter goes to the shell or
+ *     Claude Code. App shortcuts there take Ctrl+Shift: Ctrl+Shift+X
+ *     first tries the Mac Cmd+Shift+X shortcut, then Cmd+X (so
+ *     Ctrl+Shift+T is a new Claude tab and Ctrl+Shift+W closes the tab).
+ */
 export function matchGlobalShortcut(
-  e: KeyboardEvent,
+  e: ShortcutKeyEvent,
+  ctx: FocusContext
+): ShortcutMatch | null {
+  const platform = ctx.platform ?? rendererPlatform()
+  if (platform !== 'win32') return matchMacChord(e, ctx)
+  if (e.key === 'Tab') return matchMacChord({ ...pick(e), metaKey: false }, ctx)
+  if (!e.ctrlKey) return null
+  const asMac = { ...pick(e), metaKey: true, ctrlKey: false }
+  if (ctx.inTerminal && isTerminalControlKey(e)) {
+    if (!e.shiftKey) return null
+    return matchMacChord(asMac, ctx) ?? matchMacChord({ ...asMac, shiftKey: false, key: unshiftedKey(e) }, ctx)
+  }
+  return matchMacChord(asMac, ctx)
+}
+
+function pick(e: ShortcutKeyEvent): ShortcutKeyEvent {
+  return { metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, key: e.key, code: e.code }
+}
+
+/** The key without Shift for a letter or bracket code (Shift+T gives key
+ *  'T'; the matcher compares lower-case, but [ and ] become { and }). */
+function unshiftedKey(e: ShortcutKeyEvent): string {
+  if (e.code === 'BracketLeft') return '['
+  if (e.code === 'BracketRight') return ']'
+  if (e.code === 'Backslash') return '\\'
+  const m = /^Key([A-Z])$/.exec(e.code)
+  return m ? m[1].toLowerCase() : e.key
+}
+
+function matchMacChord(
+  e: ShortcutKeyEvent,
   ctx: FocusContext
 ): ShortcutMatch | null {
   const meta = e.metaKey
@@ -554,4 +616,39 @@ export function isInAnyTextInput(doc: Document): boolean {
 export function isInFindBar(doc: Document): boolean {
   const active = doc.activeElement as HTMLElement | null
   return !!active?.closest('[data-duo-findbar]')
+}
+
+/** Windows support: whether focus is inside a terminal (xterm's helper
+ *  textarea lives under the `.xterm` root). Feeds ctx.inTerminal. */
+export function isInTerminal(doc: Document): boolean {
+  const active = doc.activeElement as HTMLElement | null
+  return !!active?.closest('.xterm')
+}
+
+/** Windows support: what a terminal keystroke means for copy and paste on
+ *  Windows, or null to handle it normally. Ctrl+C copies only when text is
+ *  selected (otherwise it's the terminal's interrupt); Ctrl+Shift+C always
+ *  copies; Ctrl+V and Ctrl+Shift+V paste. Other platforms: always null
+ *  (Cmd+C / Cmd+V are the menu's). */
+export function windowsClipboardAction(
+  e: ShortcutKeyEvent,
+  hasSelection: boolean,
+  platform: string | undefined
+): 'copy' | 'paste' | null {
+  if (platform !== 'win32' || !e.ctrlKey || e.altKey || e.metaKey) return null
+  if (e.code === 'KeyC') return e.shiftKey || hasSelection ? 'copy' : null
+  if (e.code === 'KeyV') return 'paste'
+  return null
+}
+
+/** Windows support: the "Cmd" modifier for local keyboard handlers, which
+ *  check modifiers directly rather than through matchGlobalShortcut. Ctrl on
+ *  Windows, Cmd elsewhere. `otherMod` is the one that must NOT be held for
+ *  a plain Cmd-chord (Cmd's `!ctrlKey` guard becomes `!metaKey` on Windows,
+ *  where metaKey is the Windows key). */
+export function primaryMod(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
+  return rendererPlatform() === 'win32' ? e.ctrlKey : e.metaKey
+}
+export function otherMod(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
+  return rendererPlatform() === 'win32' ? e.metaKey : e.ctrlKey
 }

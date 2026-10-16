@@ -1337,7 +1337,9 @@ export class BrowserManager {
         return
       }
 
-      if (!input.meta) return
+      // Windows support: Ctrl is the shortcut modifier there (the renderer's
+      // matcher maps it to the Mac table).
+      if (!(process.platform === 'win32' ? input.control : input.meta)) return
       const isDuoShortcut =
         key === 't' ||
         key === 'n' ||

@@ -25,6 +25,7 @@
 //     markdown stays literal.
 
 import * as blockOps from './blockOps'
+import { primaryMod, otherMod } from '../../keyboard/globalShortcuts' // Windows support: Ctrl as Cmd
 
 // ── Pure trigger matcher (extracted v0.6.4 for unit testing) ────────────────
 //
@@ -117,7 +118,7 @@ export function installMarkdownShortcuts(doc: Document): () => void {
     // — same chord, same handler shape, same no-op-outside-list semantics.
     // ⌘⇧[ / ⌘⇧] are claimed globally per ListIndentShortcuts comments;
     // the !shiftKey guard keeps us from shadowing those.
-    if (e.metaKey && !e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === '[' || e.key === ']')) {
+    if (primaryMod(e) && !e.shiftKey && !otherMod(e) && !e.altKey && (e.key === '[' || e.key === ']')) {
       if (handleListIndent(doc, e.key === '[')) {
         e.preventDefault()
       }

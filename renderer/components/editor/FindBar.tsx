@@ -23,6 +23,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
+import { primaryMod, otherMod } from '../../keyboard/globalShortcuts' // Windows support: Ctrl as Cmd
 
 interface Props {
   editor: Editor | null
@@ -79,21 +80,21 @@ export function FindBar({ editor, open, onClose }: Props) {
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // ⌘F while the input has focus: re-select (Chrome parity).
-    if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'f') {
+    if (primaryMod(e) && !e.shiftKey && !e.altKey && !otherMod(e) && e.key.toLowerCase() === 'f') {
       e.preventDefault()
       e.stopPropagation()
       inputRef.current?.select()
       return
     }
     // ⌘⇧F → previous match.
-    if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'f') {
+    if (primaryMod(e) && e.shiftKey && !e.altKey && !otherMod(e) && e.key.toLowerCase() === 'f') {
       e.preventDefault()
       e.stopPropagation()
       editor?.commands.findPrev()
       return
     }
     // ⌘G → next match.
-    if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'g') {
+    if (primaryMod(e) && !e.shiftKey && !e.altKey && !otherMod(e) && e.key.toLowerCase() === 'g') {
       e.preventDefault()
       e.stopPropagation()
       editor?.commands.findNext()

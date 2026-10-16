@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import type { TabSession } from '@shared/types'
-import { matchGlobalShortcut } from '../keyboard/globalShortcuts'
+import { matchGlobalShortcut, windowsClipboardAction, primaryMod, otherMod } from '../keyboard/globalShortcuts'
 import { useClaudeKeyPrefs } from '../hooks/useClaudeKeyPrefs'
 import { useClaudePresence } from '../hooks/useClaudePresence'
 import { shellEnter } from '../../shared/shell-enter'
@@ -383,7 +383,21 @@ function TerminalInstance({ tab, isActive, onTitleChange, cozy, fontBump, themeE
     // automatic terminal-pane coverage; old hardcoded list cannot
     // drift.
     term.attachCustomKeyEventHandler((e) => {
-      const match = matchGlobalShortcut(e, { inEditableSurface: false })
+      // Windows support: copy and paste the Windows Terminal / VS Code way.
+      // Ctrl+C copies when text is selected and otherwise goes through to
+      // the terminal as an interrupt; Ctrl+Shift+C always copies; Ctrl+V
+      // and Ctrl+Shift+V paste (returning false leaves the browser's own
+      // paste to happen, which xterm picks up).
+      const clip = windowsClipboardAction(e, term.hasSelection(), window.electron.env.platform)
+      if (clip === 'copy') {
+        if (e.type === 'keydown') {
+          void window.electron.clipboard.writeText(term.getSelection())
+          term.clearSelection()
+        }
+        return false
+      }
+      if (clip === 'paste') return false
+      const match = matchGlobalShortcut(e, { inEditableSurface: false, inTerminal: true })
       if (match) return false
       // ENH-127 v2 (2026-05-10) — Path 3b: in Claude tabs ONLY, plain
       // Enter writes a multi-line newline to Claude's input buffer
@@ -460,8 +474,9 @@ function TerminalInstance({ tab, isActive, onTitleChange, cozy, fontBump, themeE
       // kind='claude' tabs (spawned via ⌘⇧T / `duo new-tab --claude`),
       // missing the common case of typing `claude` into a normal shell.
       const claudeIsLive = tab.kind === 'claude' || claudePresenceRef.current === 'claude'
-      if (claudeIsLive && e.key === 'Enter' && !e.altKey && !e.ctrlKey) {
-        if (e.metaKey) {
+      // Windows support: Ctrl+Enter there is the Cmd+Enter submit.
+      if (claudeIsLive && e.key === 'Enter' && !e.altKey && !otherMod(e)) {
+        if (primaryMod(e)) {
           // ⌘Enter / ⌘⇧Enter — always submit. No toggle.
           if (e.type === 'keydown') window.electron.pty.write(tab.id, '\r')
           return false
