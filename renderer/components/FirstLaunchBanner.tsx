@@ -208,7 +208,7 @@ export function FirstLaunchBanner() {
 
       {showShimMissingNote && (
         <p className="text-[12px] ml-7 text-accent-ink leading-snug">
-          <strong>Couldn't find Claude Code on this computer.</strong> Duo searched your usual shell paths and didn't see <code className="font-mono">claude</code>. If it's installed, the agent inside Duo's terminals will still work — it just won't be Duo-aware (won't know how to drive the browser pane, etc.). Install Claude Code from <a href="https://docs.claude.com/claude-code" className="underline">docs.claude.com/claude-code</a>, then click Update.
+          <strong>Couldn't find Claude Code on this computer.</strong> Duo searched your usual shell paths and didn't see <code className="font-mono">claude</code>. If it's installed, the agent inside Duo's terminals will still work; it just won't be Duo-aware (won't know how to drive the browser pane, etc.). Install Claude Code from <a href="https://docs.claude.com/claude-code" className="underline">docs.claude.com/claude-code</a>, then click Update.
         </p>
       )}
 
