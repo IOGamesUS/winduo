@@ -861,6 +861,10 @@ export interface PrimingInstallStatus {
   /** True if the load-bearing PATH shim file exists + is executable
    *  at ~/.claude/duo/bin/claude. */
   shimInstalled: boolean
+  /** Windows support: false where the shell-script shim isn't used
+   *  (Windows). The banner then checks realClaudePath instead of
+   *  shimInstalled. Optional: absent means true (older status shape). */
+  shimApplicable?: boolean
   /** Absolute path to the real `claude` binary that the shim execs.
    *  Resolved via a login shell at install time. Undefined if the
    *  install couldn't find Claude Code on the user's PATH (the shim

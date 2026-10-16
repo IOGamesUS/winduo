@@ -151,6 +151,18 @@ const HOOK_MARKER_PREFIX = 'managed-v'
 // the hook from breaking SessionStart if priming.md has been deleted
 // — better to skip priming than fail the session start.
 const HOOK_COMMAND = `[ -n "$DUO_SESSION" ] && cat "$HOME/.claude/duo/priming.md" 2>/dev/null || true`
+// Windows support: the same hook as a PowerShell one-liner in exec form, so
+// it runs whether Claude Code hooks use Git Bash or PowerShell there. Prints
+// priming.md inside a Duo terminal, nothing otherwise, and always exits 0.
+const WIN_SESSION_START_SCRIPT =
+  "if ($env:DUO_SESSION) { Get-Content -Raw -LiteralPath (Join-Path $env:USERPROFILE '.claude\\duo\\priming.md') -ErrorAction SilentlyContinue }; exit 0"
+
+/** Windows support: the SessionStart priming hook for each platform. */
+export function sessionStartHookCommand(windows: boolean): ManagedHookCommand {
+  return windows
+    ? { type: 'command', command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', WIN_SESSION_START_SCRIPT] }
+    : { type: 'command', command: HOOK_COMMAND }
+}
 
 // Stage 19e ENH-088 — managed block in ~/.claude/CLAUDE.md. Hook-
 // independent — works even when Claude Code's hook runtime is
@@ -423,6 +435,8 @@ function sameHookCommand(h: unknown, command: string, args?: string[]): boolean 
   if (!args && !theirs) return true
   return JSON.stringify(theirs ?? null) === JSON.stringify(args ?? null)
 }
+
+const SESSION_START_HOOK = sessionStartHookCommand(IS_WINDOWS)
 
 /** Windows support: the duo.cmd launcher. It runs the CLI bundle with Duo's
  *  own Electron binary in Node mode (ELECTRON_RUN_AS_NODE), so `duo` works
@@ -969,7 +983,11 @@ export class InstallService {
 
     let shimInstalled = false
     let realClaudePath: string | undefined
-    try {
+    if (IS_WINDOWS) {
+      // Windows support: the shim isn't used there, so report where claude
+      // was found instead; the banner warns only when it wasn't.
+      realClaudePath = (await resolveClaudeBinary()) ?? undefined
+    } else try {
       await fs.access(SHIM_PATH, fs.constants.X_OK)
       shimInstalled = true
       // Best-effort read of the inlined real-claude path so the
@@ -1008,8 +1026,7 @@ export class InstallService {
               const inner = e.hooks
               const isDuoCommandOrphan = Array.isArray(inner) && inner.some(h =>
                 h && typeof h === 'object' &&
-                typeof (h as Record<string, unknown>).command === 'string' &&
-                ((h as Record<string, unknown>).command as string) === HOOK_COMMAND
+                sameHookCommand(h, SESSION_START_HOOK.command, SESSION_START_HOOK.args)
               )
               if (!isDuoCommandOrphan) {
                 // A genuinely-foreign SessionStart hook — note the
@@ -1025,7 +1042,7 @@ export class InstallService {
       // Settings file absent or malformed — leave defaults.
     }
 
-    return { primingFile, shimInstalled, realClaudePath, hookInstalled, hookVersion, hookConflict }
+    return { primingFile, shimInstalled, shimApplicable: !IS_WINDOWS, realClaudePath, hookInstalled, hookVersion, hookConflict }
   }
 
   /**
@@ -1205,8 +1222,7 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
       if (!Array.isArray(inner)) return false
       return inner.some(h =>
         h && typeof h === 'object' &&
-        typeof (h as Record<string, unknown>).command === 'string' &&
-        ((h as Record<string, unknown>).command as string) === HOOK_COMMAND
+        sameHookCommand(h, SESSION_START_HOOK.command, SESSION_START_HOOK.args)
       )
     }
     const filtered = existing.filter(entry => {
@@ -1222,7 +1238,7 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
     const duoEntry = {
       [HOOK_MARKER_KEY]: `${HOOK_MARKER_PREFIX}${app.getVersion()}`,
       hooks: [
-        { type: 'command', command: HOOK_COMMAND }
+        SESSION_START_HOOK
       ]
     }
 

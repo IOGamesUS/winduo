@@ -31,7 +31,8 @@ import {
   planCliShim,
   planManagedHooksMerge,
   managedHookCommand,
-  windowsCliLauncher
+  windowsCliLauncher,
+  sessionStartHookCommand
 } from './install-service'
 
 describe('composeManagedClaudeMdBlock', () => {
@@ -378,5 +379,20 @@ describe('Windows support: managed hooks and the CLI launcher', () => {
     expect(lines[0]).toBe('@echo off')
     expect(lines).toContain('set ELECTRON_RUN_AS_NODE=1')
     expect(lines).toContain('"C:\\Program Files\\Duo\\Duo.exe" "C:\\Users\\ian\\.local\\bin\\duo-cli.js" %*')
+  })
+})
+
+describe('Windows support: SessionStart priming hook', () => {
+  it('keeps the POSIX shell one-liner', () => {
+    const h = sessionStartHookCommand(false)
+    expect(h.command).toContain('cat "$HOME/.claude/duo/priming.md"')
+    expect(h.args).toBeUndefined()
+  })
+  it('uses PowerShell in exec form on Windows', () => {
+    const h = sessionStartHookCommand(true)
+    expect(h.command).toBe('powershell.exe')
+    expect(h.args?.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-Command'])
+    expect(h.args?.[3]).toContain("'.claude\\duo\\priming.md'")
+    expect(h.args?.[3]).toContain('$env:DUO_SESSION')
   })
 })
