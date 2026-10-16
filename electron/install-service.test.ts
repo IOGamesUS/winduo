@@ -13,6 +13,7 @@
 // from a path that uses vitest module mocking (vi.mock electron). Easier
 // pattern: pull the pure helpers into a mocked import.
 
+import * as path from 'path'
 import { describe, it, expect, vi } from 'vitest'
 
 // Electron isn't available in node test env. Mock it so the install-
@@ -32,7 +33,8 @@ import {
   planManagedHooksMerge,
   managedHookCommand,
   windowsCliLauncher,
-  sessionStartHookCommand
+  sessionStartHookCommand,
+  bundledCandidates
 } from './install-service'
 
 describe('composeManagedClaudeMdBlock', () => {
@@ -394,5 +396,23 @@ describe('Windows support: SessionStart priming hook', () => {
     expect(h.args?.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-Command'])
     expect(h.args?.[3]).toContain("'.claude\\duo\\priming.md'")
     expect(h.args?.[3]).toContain('$env:DUO_SESSION')
+  })
+})
+
+describe('bundledCandidates (packaged-app resource lookup)', () => {
+  const app = path.join('/Apps/Duo/resources', 'app.asar')
+  const res = '/Apps/Duo/resources'
+  it('keeps the full path under skill/ for nested files', () => {
+    const c = bundledCandidates(path.join(app, 'skill', 'scripts', 'duo-attention.ps1'), app, res, 'file')
+    expect(c[0]).toBe(path.join(res, 'skill', 'scripts', 'duo-attention.ps1'))
+  })
+  it('still offers the old one-level guess as a fallback', () => {
+    const c = bundledCandidates(path.join(app, 'skill', 'SKILL.md'), app, res, 'file')
+    expect(c).toEqual([path.join(res, 'skill', 'SKILL.md')])
+  })
+  it('handles folders', () => {
+    const c = bundledCandidates(path.join(app, 'skill', 'references'), app, res, 'dir')
+    expect(c[0]).toBe(path.join(res, 'skill', 'references'))
+    expect(c).toContain(path.join(res, 'references'))
   })
 })

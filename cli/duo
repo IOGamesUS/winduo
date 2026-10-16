@@ -7192,7 +7192,7 @@ ${mergeRes.stdout}`.trim();
 }
 
 // cli/duo.ts
-var VERSION = true ? "0.13.8" : "0.0.0-dev";
+var VERSION = true ? "0.13.9" : "0.0.0-dev";
 var VERBS = [
   // ── Browser & tabs ──
   {

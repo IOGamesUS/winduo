@@ -13,13 +13,26 @@ param([string]$State = '')
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-if (-not $env:DUO_SESSION -or -not $env:DUO_TAB) { exit 0 }
+# Diagnostics: one line per run in ~/.claude/duo/logs/attention-hook.log
+# (kept under 64 KB), so a missing dot can be traced to the step that
+# stopped. Never affects the hook's result.
+$logFile = Join-Path $env:USERPROFILE '.claude\duo\logs\attention-hook.log'
+function Write-HookLog([string]$Msg) {
+  try {
+    $dir = Split-Path $logFile
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    if ((Test-Path -LiteralPath $logFile) -and (Get-Item -LiteralPath $logFile).Length -gt 65536) { Remove-Item -LiteralPath $logFile -Force }
+    Add-Content -LiteralPath $logFile -Value ("{0} state={1} tab={2} {3}" -f (Get-Date -Format s), $State, $env:DUO_TAB, $Msg)
+  } catch { }
+}
+
+if (-not $env:DUO_SESSION -or -not $env:DUO_TAB) { Write-HookLog 'skipped: not in a Duo terminal'; exit 0 }
 if ($State -notin @('set', 'clear', 'digest')) { exit 0 }
 
 # The duo CLI: PATH first, then the install destination.
 $duo = (Get-Command duo -ErrorAction SilentlyContinue | Select-Object -First 1).Source
 if (-not $duo) { $duo = Join-Path $env:USERPROFILE '.local\bin\duo.cmd' }
-if (-not (Test-Path -LiteralPath $duo)) { exit 0 }
+if (-not (Test-Path -LiteralPath $duo)) { Write-HookLog "skipped: duo CLI not found at $duo"; exit 0 }
 
 function Invoke-Digest([string[]]$Extra) {
   try { & $duo session digest $env:DUO_TAB @Extra *> $null } catch { }
@@ -27,11 +40,11 @@ function Invoke-Digest([string[]]$Extra) {
 
 switch ($State) {
   'set' {
-    try { & $duo attention --tab $env:DUO_TAB --state set *> $null } catch { }
+    try { & $duo attention --tab $env:DUO_TAB --state set *> $null; Write-HookLog "attention set exit=$LASTEXITCODE" } catch { Write-HookLog "attention set failed: $_" }
     Invoke-Digest @()
   }
   'clear' {
-    try { & $duo attention --tab $env:DUO_TAB --state clear *> $null } catch { }
+    try { & $duo attention --tab $env:DUO_TAB --state clear *> $null; Write-HookLog "attention clear exit=$LASTEXITCODE" } catch { Write-HookLog "attention clear failed: $_" }
     Invoke-Digest @('--you-asked-only')
   }
   'digest' { Invoke-Digest @() }

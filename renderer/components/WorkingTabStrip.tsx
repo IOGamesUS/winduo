@@ -389,6 +389,9 @@ export function WorkingTabStrip({
             onDragOver={(e) => {
               if (e.dataTransfer.types.includes('application/x-duo-tab-id')) {
                 e.preventDefault()
+                // Windows fix: accept the move explicitly (see TabBar).
+                e.dataTransfer.dropEffect = 'move'
+                e.stopPropagation()
                 setDropTargetId(tab.id)
               }
             }}

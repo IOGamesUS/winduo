@@ -5238,6 +5238,9 @@ export function App() {
               // shows the no-drop cursor.
               const ours = e.dataTransfer.types.includes(DUO_FS_PATH_MIME)
               e.preventDefault()
+              // A tab being reordered inside this column's tab strip is the
+              // strip's business; leave its 'move' alone (Windows fix).
+              if (e.dataTransfer.types.includes('application/x-duo-terminal-tab-id')) return
               e.dataTransfer.dropEffect = ours ? 'copy' : 'none'
             }}
             onDrop={(e) => {

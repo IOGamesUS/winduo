@@ -158,6 +158,12 @@ export function TabBar({
             onDragOver={onReorderTab ? (e) => {
               if (e.dataTransfer.types.includes('application/x-duo-terminal-tab-id')) {
                 e.preventDefault()
+                // Windows fix: accept the move explicitly. Without it Windows
+                // proposes a copy, which effectAllowed 'move' refuses, and the
+                // drop never fires. stopPropagation keeps the terminal column's
+                // file-drop handler from overriding this with 'none'.
+                e.dataTransfer.dropEffect = 'move'
+                e.stopPropagation()
                 setDropTargetId(tab.id)
               }
             } : undefined}

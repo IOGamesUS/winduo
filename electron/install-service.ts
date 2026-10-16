@@ -438,6 +438,22 @@ function sameHookCommand(h: unknown, command: string, args?: string[]): boolean 
 
 const SESSION_START_HOOK = sessionStartHookCommand(IS_WINDOWS)
 
+/**
+ * Candidate locations for a bundled source in a packaged app's resources
+ * folder, best first: the path relative to the app root (extraResources
+ * mirrors `skill/`, `agents/`, `cli/` there), then the older guesses (the
+ * last folder plus the file name; for a folder, its own name).
+ */
+export function bundledCandidates(src: string, appRoot: string, resourcesRoot: string, kind: 'file' | 'dir'): string[] {
+  const out: string[] = []
+  const rel = path.relative(appRoot, src)
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) out.push(path.join(resourcesRoot, rel))
+  out.push(kind === 'file'
+    ? path.join(resourcesRoot, path.basename(path.dirname(src)), path.basename(src))
+    : path.join(resourcesRoot, path.basename(src)))
+  return [...new Set(out)]
+}
+
 /** Windows support: the duo.cmd launcher. It runs the CLI bundle with Duo's
  *  own Electron binary in Node mode (ELECTRON_RUN_AS_NODE), so `duo` works
  *  without a separate Node install. Rewritten on every launch by
@@ -1562,6 +1578,35 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
     return app.getAppPath()
   }
 
+  /**
+   * Where a bundled source file or folder lives in a packaged app, when it
+   * isn't at its app-path location (skill/, agents/ and cli/ ship as
+   * extraResources outside the asar). Tries the path relative to the app
+   * root first (`skill/scripts/x` -> `<resources>/skill/scripts/x`), then
+   * the older one-level guesses.
+   *
+   * Fix: the previous lookup kept only the last folder name, so
+   * `skill/scripts/duo-attention.*` resolved to `<resources>/scripts/...`,
+   * which doesn't exist. The hook scripts were then skipped on install
+   * while settings.json still registered them, so the attention dot never
+   * appeared in packaged builds.
+   */
+  private async resolveBundled(src: string, kind: 'file' | 'dir'): Promise<string | null> {
+    try {
+      await fs.access(src)
+      return src
+    } catch { /* not at the app path; try resources */ }
+    const res = this.resourcesRoot()
+    if (!res) return null
+    for (const candidate of bundledCandidates(src, this.sourceRoot(), res, kind)) {
+      try {
+        await fs.access(candidate)
+        return candidate
+      } catch { /* next */ }
+    }
+    return null
+  }
+
   private resourcesRoot(): string | null {
     return process.resourcesPath || null
   }
@@ -1918,19 +1963,8 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
     const relPath = this.relPathUnderClaude(dest)
 
     // Resolve src against resourcesRoot fallback (mirror copyIfPresent's logic).
-    let resolved = src
-    try {
-      await fs.access(resolved)
-    } catch {
-      const res = this.resourcesRoot()
-      if (!res) return { relPath, outcome: 'skipped-source-missing' }
-      resolved = path.join(res, path.basename(path.dirname(src)), path.basename(src))
-      try {
-        await fs.access(resolved)
-      } catch {
-        return { relPath, outcome: 'skipped-source-missing' }
-      }
-    }
+    const resolved = await this.resolveBundled(src, 'file')
+    if (!resolved) return { relPath, outcome: 'skipped-source-missing' }
 
     // Check existing dest state.
     let destExists = false
@@ -2050,19 +2084,8 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
     results: FileInstallResult[],
     excludeTopLevel?: Set<string>
   ): Promise<void> {
-    let resolved = srcDir
-    try {
-      await fs.access(resolved)
-    } catch {
-      const res = this.resourcesRoot()
-      if (!res) return
-      resolved = path.join(res, path.basename(srcDir))
-      try {
-        await fs.access(resolved)
-      } catch {
-        return
-      }
-    }
+    const resolved = await this.resolveBundled(srcDir, 'dir')
+    if (!resolved) return
     await fs.mkdir(destDir, { recursive: true })
     const entries = await fs.readdir(resolved, { withFileTypes: true })
     for (const e of entries) {
@@ -2089,43 +2112,18 @@ exec "$REAL_CLAUDE" --append-system-prompt "$(cat "$PRIMING_FILE")" "$@"
   // source is missing — lets the install succeed in dev environments
   // that don't have every directory populated.
   private async copyIfPresent(src: string, dest: string): Promise<void> {
-    let resolved = src
-    try {
-      await fs.access(resolved)
-    } catch {
-      // Try resourcesPath fallback for the extraResources tree (skill,
-      // agents, cli — they're outside asar in production).
-      const res = this.resourcesRoot()
-      if (!res) return
-      resolved = path.join(res, path.basename(path.dirname(src)), path.basename(src))
-      try {
-        await fs.access(resolved)
-      } catch {
-        return
-      }
-    }
+    // extraResources fallback (skill, agents, cli live outside the asar).
+    const resolved = await this.resolveBundled(src, 'file')
+    if (!resolved) return
     await fs.mkdir(path.dirname(dest), { recursive: true })
     await fs.copyFile(resolved, dest)
   }
 
   private async copyDirContents(srcDir: string, destDir: string): Promise<void> {
-    let resolved = srcDir
-    try {
-      await fs.access(resolved)
-    } catch {
-      const res = this.resourcesRoot()
-      if (!res) return
-      // For extraResources, electron-builder mirrors the directory name
-      // (e.g. extraResources `from: skill/ to: skill/` lands at
-      // `<resources>/skill/`). The basename of the source is what we
-      // try.
-      resolved = path.join(res, path.basename(srcDir))
-      try {
-        await fs.access(resolved)
-      } catch {
-        return
-      }
-    }
+    // extraResources mirrors the source tree (`from: skill/ to: skill/`
+    // lands at `<resources>/skill/`); see resolveBundled.
+    const resolved = await this.resolveBundled(srcDir, 'dir')
+    if (!resolved) return
     await fs.mkdir(destDir, { recursive: true })
     const entries = await fs.readdir(resolved, { withFileTypes: true })
     for (const e of entries) {
