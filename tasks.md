@@ -2,9 +2,43 @@
 
 > **Scope.** Engineering ledger — open work + root-cause writeups for closed bugs. **Canonical version-by-version inventory lives in [CHANGELOG.md](CHANGELOG.md)** and the prose log in docs/RELEASES.md; this file is the running notebook with the "why did this break, what did we learn" detail those don't carry. \*\***Reading guide.** Status field on each entry: `🆕 Filed` / `🟡` / `⏳ Open` (active work) vs. `✅ Shipped vX.Y.Z` (closed; kept for historical reference). To find what's actively open at a glance: `grep -B1 "Status:\*\* (🆕\|🟡\|⏳)"`. \*\***Closed-work archive (ENH-191 / D1, 2026-05-31).** Closed entries (✅ shipped · ❌ won't-do · 🟢 done) now live in [tasks-archive.md](tasks-archive.md) — this file had grown to an 11k-line / 1.2 MB monolith (Duo's own editor worst-case). The cut-version skill moves newly-closed entries to the archive on each cut so this stays lean. \*\***Status legend.** OPEN (stay here): 🆕 filed · 🟡 awaiting-decision · ⏳ open · 🚧 in-progress · 🔴 blocker · ⬜ draft · ⚠️ / 🔵 see entry. CLOSED (archived): ✅ shipped · ❌ won't-do · 🟢 done.
 
+### ENH-268: Winduo, sessions step 1: Duo assigns each Claude session's ID
+
+**Status:** 🧪 Built, awaiting Windows test (2026-10-18). **Priority:** P1. **Design:** "Winduo design: sessions and the needs-you queue" (owner-approved 2026-10-18, recommendations accepted).
+
+Duo starts Claude with `claude --session-id <id it chose>` and records the ID on the tab, instead of inferring the session from running processes and the newest transcript. Resume uses the same ID. Foundation for ENH-269 and ENH-270.
+
+Built: `core/tab-sessions.ts` (in-memory registry, `source: launch|hook`). New Claude tabs launch with `--session-id`; resume binds the resumed id (forks rebind from the hook). The managed attention hooks (.sh and .ps1) forward Claude Code's stdin `session_id` via `duo attention --session`, so `/clear` and `/resume` rebind on the next prompt. Readers that use the binding first: `sessionIdForTab` (catch-up digest), the persist hook (`lastClaudeSession`), Home's open-session join (works on Windows, where cwd lookup can't). New verbs: `duo session current [<tab>]`, `duo session bind <tab> <id>`. Also fixed: `duo session resume` typed `\n`, which doesn't run on Windows.
+
+---
+
+### ENH-269: Winduo, sessions step 2: live needs-you queue
+
+**Status:** 📋 Planned (after ENH-268). **Priority:** P1.
+
+Hooks record the reason (question, permission, plan), Claude's exact words and when waiting started; cleared on answer. Shown live in Catch-up's Needs you column, a "N need you" toolbar chip on every screen, and Windows notifications (default on, only while Winduo isn't focused) plus a taskbar badge. CLI: `duo needs-you`.
+
+---
+
+### ENH-270: Winduo, sessions step 3: session list, archive, transcript copies
+
+**Status:** 📋 Planned (after ENH-269). **Priority:** P2.
+
+A third Home mode, "List": every session with sections (Needs you, Open, Today, This week, Earlier, Archived) and a filter. Archive/unarchive. Transcript copies in Duo's data folder so Claude Code's 30-day cleanup never removes a session (default on, size shown in Settings). Sessions started outside Duo are listed without live state. CLI: `duo sessions`, `duo session archive|unarchive`.
+
+---
+
+### ENH-271: Winduo: simple kanban board for tasks
+
+**Status:** 📋 Backlog (owner ask 2026-10-18). **Priority:** P2. **Needs:** a short design pass before building.
+
+Owner: "more intuitive task tracking... almost like a simple kanban way to view and manage my different tasks." A board (for example To do / Doing / Done) where tasks are cards you can create, drag between columns, edit and link to Claude sessions and files. Questions for the design pass: where tasks live (plain Markdown files, as duo-v2 does, so they stay readable outside Duo), whether a task can own sessions (duo-v2's tasks collect their sessions), per-project boards vs one board, and the `duo` verbs Claude uses to create and move tasks (CLI parity).
+
+---
+
 ### BUG-275: `core/git/pull.test.ts` live-git test times out under full-suite load
 
-**Status:** 🆕 Filed 2026-09-20 (hit once during the v0.13.7 cut). **Priority:** P3. **Effort:** XS.
+**Status:** ✅ Shipped (Winduo, 2026-10-16: the live-git describe block now has a 30 s timeout; it also failed on Windows CI). **Priority:** P3. **Effort:** XS.
 
 **Symptom.** `runPull (live git) > needs confirmation when the tree is dirty, then discards + pulls with force` failed at 5010 ms — the default 5 s vitest timeout — in one full-suite run (2426/2427), then passed 3/3 when the file ran alone. It shells out to real `git` several times, so it is sensitive to machine load and slow disks (this run was on an iCloud-synced repo path; see BUG-274).
 

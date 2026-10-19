@@ -839,6 +839,8 @@ const api: ElectronAPI = {
     },
 
     claudeOnPath: () => ipcRenderer.invoke('terminal:claude-on-path'),
+    // ENH-268 (Winduo): record the session id a Claude tab was launched with.
+    bindClaudeSession: (tabId: string, sessionId: string) => ipcRenderer.send(IPC.CLAUDE_SESSION_BIND, { tabId, sessionId }),
 
     onNewTabRequest: (cb) => {
       const handler = (_: IpcRendererEvent, req: NewTabRequest) => cb(req)

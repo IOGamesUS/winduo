@@ -39,6 +39,14 @@ DUO_BIN="$(command -v duo 2>/dev/null)"
 [ -n "$DUO_BIN" ] || DUO_BIN="$HOME/.local/bin/duo"
 [ -x "$DUO_BIN" ] || exit 0
 
+# ENH-268: Claude Code passes the hook a JSON payload on stdin with its
+# session_id; forwarding it keeps this tab's session binding current after
+# /clear or /resume. Only read stdin when it is piped (never block a manual run).
+SESSION_ID=""
+if [ ! -t 0 ]; then
+  SESSION_ID="$(cat 2>/dev/null | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([0-9A-Za-z][0-9A-Za-z-]*\)".*/\1/p' | head -n 1)"
+fi
+
 # ENH-231 — materialize the catch-up digest. Always `|| true`-guarded so a hung
 # or missing-verb digest can never abort the badge (the next Stop corrects any
 # staleness). $@ lets `clear` pass `--you-asked-only`.
@@ -48,11 +56,19 @@ fire_digest() {
 
 case "$STATE" in
   set)
-    "$DUO_BIN" attention --tab "$DUO_TAB" --state set >/dev/null 2>&1 || true
+    if [ -n "$SESSION_ID" ]; then
+      "$DUO_BIN" attention --tab "$DUO_TAB" --state set --session "$SESSION_ID" >/dev/null 2>&1 || true
+    else
+      "$DUO_BIN" attention --tab "$DUO_TAB" --state set >/dev/null 2>&1 || true
+    fi
     fire_digest
     ;;
   clear)
-    "$DUO_BIN" attention --tab "$DUO_TAB" --state clear >/dev/null 2>&1 || true
+    if [ -n "$SESSION_ID" ]; then
+      "$DUO_BIN" attention --tab "$DUO_TAB" --state clear --session "$SESSION_ID" >/dev/null 2>&1 || true
+    else
+      "$DUO_BIN" attention --tab "$DUO_TAB" --state clear >/dev/null 2>&1 || true
+    fi
     fire_digest --you-asked-only
     ;;
   digest)

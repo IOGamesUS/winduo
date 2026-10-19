@@ -2625,6 +2625,8 @@ export const IPC = {
   // (editor above terminal). SET is main → renderer; STATE is renderer →
   // main so the View menu checkbox and `duo pane-layout` can read it.
   PANE_LAYOUT_SET: 'pane-layout:set',
+  // ENH-268: renderer → main: the session id Duo launched a Claude tab with.
+  CLAUDE_SESSION_BIND: 'claude-session:bind',
   PANE_LAYOUT_STATE: 'pane-layout:state',
 
   // FOLLOWUP-015 (ENH-117 v2) — View → View source menu fires this so

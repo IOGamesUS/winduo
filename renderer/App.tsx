@@ -2017,7 +2017,15 @@ export function App() {
         // buffer, claude reads it as the first user message.
         // Windows support: `\r` runs the command there (shellEnter).
         const enter = shellEnter(window.electron.env.platform)
-        payload = cmd && cmd.length > 0 ? `claude${enter}${cmd}${enter}` : `claude${enter}`
+        // ENH-268 (Winduo): Duo picks the session id, so the tab's session
+        // is known from the start rather than inferred from its folder.
+        let launch = 'claude'
+        const sessionId = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : null
+        if (sessionId && window.electron.terminal.bindClaudeSession) {
+          launch = `claude --session-id ${sessionId}`
+          window.electron.terminal.bindClaudeSession(id, sessionId)
+        }
+        payload = cmd && cmd.length > 0 ? `${launch}${enter}${cmd}${enter}` : `${launch}${enter}`
       } else {
         // claude not on PATH — show the install banner. Cmd (if any)
         // is dropped: it's a Claude prompt, useless without Claude.

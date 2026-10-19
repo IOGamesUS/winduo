@@ -12,7 +12,7 @@ import * as path from 'path'
 
 const SCRIPT = path.resolve(__dirname, '../skill/scripts/duo-attention.ps1')
 
-function runHook(state: string, opts: { env?: Record<string, string>; failOn?: string } = {}): { calls: string[]; threw: boolean } {
+function runHook(state: string, opts: { env?: Record<string, string>; failOn?: string; input?: string } = {}): { calls: string[]; threw: boolean } {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-hook-ps1-'))
   const bin = path.join(tmp, 'bin')
   fs.mkdirSync(bin)
@@ -42,6 +42,7 @@ function runHook(state: string, opts: { env?: Record<string, string>; failOn?: s
     execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, state], {
       env,
       stdio: 'pipe',
+      input: opts.input ?? '',
       windowsHide: true
     })
   } catch {
@@ -73,6 +74,12 @@ describe.skipIf(process.platform !== 'win32')('duo-attention.ps1 (Windows turn-b
     const { calls, threw } = runHook('set', { failOn: 'session' })
     expect(threw).toBe(false)
     expect(calls).toContain('attention --tab tab-7 --state set')
+  })
+
+  it('forwards the session_id from the hook payload (ENH-268)', () => {
+    const id = '75b057bd-07fd-4a08-a633-671e94587dd5'
+    const { calls } = runHook('set', { input: JSON.stringify({ session_id: id, hook_event_name: 'Stop' }) })
+    expect(calls).toContain(`attention --tab tab-7 --state set --session ${id}`)
   })
 
   it('no DUO_TAB or an unknown arg does nothing', () => {

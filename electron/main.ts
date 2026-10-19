@@ -106,6 +106,7 @@ import { ActiveWorkspaceService } from '../core/active-workspace-service'
 import { BROWSER_SESSION_PARTITION } from '../core/constants'
 import { ClaudePresenceProbe, mapLiveClaudeOwners } from '../core/claude-presence'
 import { buildResumeCommand, detectLatestClaudeSession, encodeProjectDir, listTopLevelSessions } from './claude-session-tracker'
+import { TabSessionRegistry, isSessionId } from '../core/tab-sessions'
 import { CronStore } from '../core/cron-store'
 import { CronService } from '../core/cron-service'
 import { deepestEnclosingRoot } from '../shared/projects'
@@ -640,6 +641,45 @@ sessionStateService.setActiveWorkspaceResolver(
 // Stale-cap at 24h so a months-old session-jsonl doesn't keep
 // surfacing the Resume banner.
 const CLAUDE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000
+// ENH-268 (Winduo): which Claude session each terminal tab runs, recorded
+// from evidence (Duo's own `--session-id` at launch, then the session_id
+// Claude Code passes Duo's hooks). Read first by the persist hook, the digest
+// and Home's open-session join; the older cwd/newest-transcript inference is
+// the fallback when a tab has no binding.
+const tabSessions = new TabSessionRegistry()
+
+/** Where a session's transcript is: the cwd's project folder first, then any
+ *  project folder (a session that moved or was resumed elsewhere). */
+async function findTranscriptPath(sessionId: string, cwdHint?: string | null): Promise<string | null> {
+  const root = join(homedir(), '.claude', 'projects')
+  const name = `${sessionId}.jsonl`
+  const fsp = await import('fs/promises')
+  if (cwdHint) {
+    const direct = join(root, encodeProjectDir(cwdHint), name)
+    try { await fsp.access(direct); return direct } catch { /* look elsewhere */ }
+  }
+  try {
+    for (const dir of await fsp.readdir(root)) {
+      const p = join(root, dir, name)
+      try { await fsp.access(p); return p } catch { /* next */ }
+    }
+  } catch { /* no projects folder */ }
+  return null
+}
+
+function bindTabSession(tabId: string, sessionId: string, source: 'launch' | 'hook'): { ok: boolean; error?: string } {
+  if (!tabId) return { ok: false, error: 'tab id required' }
+  if (!isSessionId(sessionId)) return { ok: false, error: `not a session id: ${String(sessionId)}` }
+  tabSessions.bind(tabId, sessionId, source)
+  return { ok: true }
+}
+
+ipcMain.on(IPC.CLAUDE_SESSION_BIND, (_event, payload: { tabId?: unknown; sessionId?: unknown }) => {
+  if (typeof payload?.tabId === 'string' && typeof payload?.sessionId === 'string') {
+    bindTabSession(payload.tabId, payload.sessionId, 'launch')
+  }
+})
+
 sessionStateService.setEnrichBeforePersistHook(async (state, windowId) => {
   // Best-effort: scan in parallel. Empty terminals list short-circuits.
   if (!state.terminals.length) return state
@@ -698,6 +738,14 @@ sessionStateService.setEnrichBeforePersistHook(async (state, windowId) => {
         // captured pointer from disk. Leave null — S1 pills will
         // surface for this tab if its cwd has prior JSONLs.
         return { ...t, lastClaudeSession: null as null }
+      }
+
+      // ENH-268: a recorded binding beats the newest-transcript guess, as
+      // long as Claude has written the transcript (it does on the first
+      // message; a session never used can't be resumed).
+      const bound = tabId ? tabSessions.get(tabId) : undefined
+      if (bound && (await findTranscriptPath(bound.sessionId, t.cwd))) {
+        return { ...t, lastClaudeSession: { id: bound.sessionId, capturedAt: bound.boundAt } }
       }
 
       const detected = await detectLatestClaudeSession(t.cwd, CLAUDE_SESSION_MAX_AGE_MS)
@@ -1661,7 +1709,10 @@ app.whenReady().then(async () => {
       const cwd = ptyManager.getCwd(tabId)
       if (cwd === null) return { ok: false, error: `tabId not found: ${tabId}` }
       if (!/^[0-9a-f-]{36}$/.test(uuid)) return { ok: false, error: `uuid must be a UUID, got: ${uuid}` }
-      ptyManager.write(tabId, `claude --resume ${uuid}\n`)
+      // Winduo: buildResumeCommand ends with the platform's Enter (`\r` on
+      // Windows, where `\n` doesn't run the command).
+      ptyManager.write(tabId, buildResumeCommand(uuid))
+      bindTabSession(tabId, uuid, 'launch') // ENH-268 (Winduo)
       return { ok: true }
     },
     // ENH-183 pared 2026-05-25 (Option A): sessionRename + sessionHydrate
@@ -1703,6 +1754,8 @@ app.whenReady().then(async () => {
       return { ok: true }
     },
     sessionDigest: (tabId, youAskedOnly) => materializeDigestForTab(tabId, youAskedOnly),
+    sessionBind: (tabId, sessionId) => bindTabSession(tabId, sessionId, 'hook'),
+    sessionCurrent: (tabId) => tabSessions.get(tabId) ?? null,
     getSessionNote: (tabId) => getSessionAnnotationField(tabId, 'note'),
     getSessionNext: (tabId) => getSessionAnnotationField(tabId, 'next'),
     setSessionNote: (tabId, text) => setSessionAnnotationField(tabId, 'note', text),
@@ -2069,6 +2122,7 @@ function setupIPC(): void {
   })
 
   ipcMain.handle(IPC.PTY_KILL, (_event, { id }: { id: string }) => {
+    tabSessions.forget(id)
     ptyManager.kill(id)
   })
 
@@ -3718,6 +3772,9 @@ function setupIPC(): void {
       cwd: action.cwd,
       cmd: buildResumeCommand(action.uuid, { fork: isFork }),
     })
+    // ENH-268 (Winduo): a plain resume continues the same session id. A fork
+    // gets a new id, which the tab's hooks report on its first prompt.
+    if (res.ok && res.id && !isFork) bindTabSession(res.id, action.uuid, 'launch')
     // Expand the terminal pane if collapsed so the spawned session is visible.
     if (res.ok) void revealTerminalIfCollapsed(senderId)
     return res.ok ? { ok: true } : { ok: false, error: res.error }
@@ -4957,8 +5014,22 @@ async function buildHomeOpenJoin(): Promise<HomeOpenJoin> {
   }
 
   // One `ps` parse: every live claude + the owning Duo PTY pid (or null).
-  const claudeProcs = await mapLiveClaudeOwners([...ptyByPid.keys()])
-  if (claudeProcs.length === 0) return { openByUuid: new Map() }
+  const allClaudeProcs = await mapLiveClaudeOwners([...ptyByPid.keys()])
+  if (allClaudeProcs.length === 0) return { openByUuid: new Map() }
+
+  // ENH-268: a live claude inside a Duo tab with a recorded session binding
+  // is attributed directly (no cwd lookup, which Windows can't do at all).
+  const direct = new Map<string, import('../shared/types').HomeSessionOpen>()
+  const claudeProcs = allClaudeProcs.filter((c) => {
+    const owner = c.ownerPtyPid != null ? ptyByPid.get(c.ownerPtyPid) : undefined
+    const bound = owner ? tabSessions.get(owner.tabId) : undefined
+    if (owner && bound) {
+      direct.set(bound.sessionId, { kind: 'duo', windowId: owner.windowId, tabId: owner.tabId })
+      return false
+    }
+    return true
+  })
+  if (claudeProcs.length === 0) return { openByUuid: direct }
 
   // Resolve each live claude's cwd (async lsof variant, never the blocking one).
   const withCwd = await Promise.all(
@@ -4991,7 +5062,8 @@ async function buildHomeOpenJoin(): Promise<HomeOpenJoin> {
     groups.push({ cwd, duoTabs, externalCount, uuidsByRecency: sessions.map((s) => s.id) })
   }
 
-  return { openByUuid: attributeOpenSessions(groups) }
+  const inferred = attributeOpenSessions(groups)
+  return { openByUuid: new Map([...inferred, ...direct]) }
 }
 
 /** Resolve a set of pids to their lsof cwds (deduped, best-effort). Used
@@ -5055,6 +5127,12 @@ async function computeHomeSnapshot(limitPerProject?: number): Promise<HomeSnapsh
 async function sessionIdForTab(tabId: string): Promise<{ uuid: string; cwd: string; jsonlPath: string } | null> {
   const cwd = ptyManager.getCwd(tabId)
   if (!cwd) return null
+  // ENH-268: the recorded binding (the follow-up this comment asked for).
+  const bound = tabSessions.get(tabId)
+  if (bound) {
+    const jsonlPath = await findTranscriptPath(bound.sessionId, cwd)
+    if (jsonlPath) return { uuid: bound.sessionId, cwd, jsonlPath }
+  }
   const projectDir = join(homedir(), '.claude', 'projects', encodeProjectDir(cwd))
   const sessions = await listTopLevelSessions(projectDir)
   if (sessions.length === 0) return null
@@ -5933,6 +6011,7 @@ async function sessionOpenForCli(
     cwd,
     cmd: buildResumeCommand(uuid, { fork: isFork }),
   })
+  if (res.ok && res.id && !isFork) bindTabSession(res.id, uuid, 'launch') // ENH-268 (Winduo)
   if (res.ok) void revealTerminalIfCollapsed(targetWindowId)
   return res.ok ? { ok: true, action: isFork ? 'fork' : 'resume' } : { ok: false, error: res.error }
 }

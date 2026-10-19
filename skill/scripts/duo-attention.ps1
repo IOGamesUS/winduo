@@ -34,17 +34,28 @@ $duo = (Get-Command duo -ErrorAction SilentlyContinue | Select-Object -First 1).
 if (-not $duo) { $duo = Join-Path $env:USERPROFILE '.local\bin\duo.cmd' }
 if (-not (Test-Path -LiteralPath $duo)) { Write-HookLog "skipped: duo CLI not found at $duo"; exit 0 }
 
+# ENH-268: Claude Code passes the hook a JSON payload on stdin that includes
+# its session_id. Forwarding it keeps this tab's session binding current
+# after /clear or /resume.
+$sessionArgs = @()
+try {
+  if ([Console]::IsInputRedirected) {
+    $payload = [Console]::In.ReadToEnd()
+    if ($payload -match '"session_id"\s*:\s*"([0-9A-Za-z][0-9A-Za-z-]{7,63})"') { $sessionArgs = @('--session', $Matches[1]) }
+  }
+} catch { }
+
 function Invoke-Digest([string[]]$Extra) {
   try { & $duo session digest $env:DUO_TAB @Extra *> $null } catch { }
 }
 
 switch ($State) {
   'set' {
-    try { & $duo attention --tab $env:DUO_TAB --state set *> $null; Write-HookLog "attention set exit=$LASTEXITCODE" } catch { Write-HookLog "attention set failed: $_" }
+    try { & $duo attention --tab $env:DUO_TAB --state set @sessionArgs *> $null; Write-HookLog "attention set exit=$LASTEXITCODE" } catch { Write-HookLog "attention set failed: $_" }
     Invoke-Digest @()
   }
   'clear' {
-    try { & $duo attention --tab $env:DUO_TAB --state clear *> $null; Write-HookLog "attention clear exit=$LASTEXITCODE" } catch { Write-HookLog "attention clear failed: $_" }
+    try { & $duo attention --tab $env:DUO_TAB --state clear @sessionArgs *> $null; Write-HookLog "attention clear exit=$LASTEXITCODE" } catch { Write-HookLog "attention clear failed: $_" }
     Invoke-Digest @('--you-asked-only')
   }
   'digest' { Invoke-Digest @() }

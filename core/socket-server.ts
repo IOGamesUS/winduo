@@ -350,6 +350,9 @@ export interface NavBridge {
   /** ENH-231 — `duo session digest <tab> [--you-asked-only]`. Materialize the
    *  tab's session digest into the rebuildable cache (the Stop-hook ping). */
   sessionDigest: (tabId: string, youAskedOnly?: boolean) => Promise<{ ok: boolean; uuid?: string; error?: string }>
+  /** ENH-268: record / read which Claude session a tab runs. */
+  sessionBind?: (tabId: string, sessionId: string) => { ok: boolean; error?: string }
+  sessionCurrent?: (tabId: string) => { sessionId: string; source: string; boundAt: number } | null
   /** ENH-231 — `duo session note <tab>` (read). The agent's last self-narrated
    *  status line for the tab's session, or null. */
   getSessionNote: (tabId: string) => Promise<string | null>
@@ -2288,6 +2291,19 @@ export class SocketServer {
             if (!tabId) throw new Error('duo session digest requires <tab>')
             const youAskedOnly = args['youAskedOnly'] === true || args['youAskedOnly'] === 'true'
             result = await this.nav.sessionDigest(tabId, youAskedOnly)
+          } else if (op === 'bind') {
+            // ENH-268: `duo session bind <tab> <session-id>`.
+            const tabId = args['tabId'] as string | undefined
+            const sessionId = args['sessionId'] as string | undefined
+            if (!tabId || !sessionId) throw new Error('session bind requires <tab> <session-id>')
+            const r = this.nav.sessionBind?.(tabId, sessionId)
+            if (!r?.ok) throw new Error(r?.error ?? 'session bind failed')
+            result = { ok: true, tabId, sessionId }
+          } else if (op === 'current') {
+            // ENH-268: `duo session current <tab>`: the recorded binding.
+            const tabId = args['tabId'] as string | undefined
+            if (!tabId) throw new Error('session current requires <tab>')
+            result = { tabId, binding: this.nav.sessionCurrent?.(tabId) ?? null }
           } else if (op === 'note' || op === 'next') {
             // ENH-231 — agent self-narration. No `text` ⇒ READ; with `text` ⇒ WRITE.
             const tabId = args['tabId'] as string | undefined
@@ -2410,6 +2426,9 @@ export class SocketServer {
           const tabId = (args['tabId'] ?? args['tab']) as string | undefined
           if (!tabId) throw new Error('attention requires --tab <id> (the DUO_TAB env stamp)')
           const needsAttention = attentionForEvent(String(args['event'] ?? ''))
+          // ENH-268: the hook also reports Claude Code's session_id; record it.
+          const sessionId = args['sessionId']
+          if (typeof sessionId === 'string' && sessionId) this.nav.sessionBind?.(tabId, sessionId)
           this.nav.setTabAttention(tabId, needsAttention)
           result = { ok: true, tabId, needsAttention }
           break

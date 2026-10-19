@@ -26,7 +26,7 @@ interface RunResult {
  */
 function runHook(
   state: string,
-  opts: { env?: Record<string, string>; failOn?: string } = {},
+  opts: { env?: Record<string, string>; failOn?: string; input?: string } = {},
 ): RunResult {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-hook-'))
   const bin = path.join(tmp, 'bin')
@@ -51,6 +51,7 @@ exit 0
         ...opts.env,
       },
       stdio: 'pipe',
+      input: opts.input ?? '',
     })
   } catch {
     threw = true // non-zero exit — a regression: the hook must never fail
@@ -91,6 +92,14 @@ describe.skipIf(process.platform === 'win32')('duo-attention.sh (turn-boundary h
     expect(threw).toBe(false) // hook still exits 0
     expect(calls).toContain('attention --tab tab-7 --state set') // badge fired
     expect(calls).toContain('session digest tab-7') // attempted, then swallowed
+  })
+
+  it('forwards the session_id from the hook payload (ENH-268)', () => {
+    const id = '75b057bd-07fd-4a08-a633-671e94587dd5'
+    const { calls } = runHook('set', { input: JSON.stringify({ session_id: id, hook_event_name: 'Stop' }) })
+    expect(calls).toContain(`attention --tab tab-7 --state set --session ${id}`)
+    const cleared = runHook('clear', { input: `{"session_id":"${id}"}` })
+    expect(cleared.calls).toContain(`attention --tab tab-7 --state clear --session ${id}`)
   })
 
   it('no DUO_TAB → no-op (fires nothing)', () => {

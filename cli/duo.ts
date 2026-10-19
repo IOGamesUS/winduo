@@ -499,7 +499,7 @@ const VERBS: VerbSpec[] = [
     name: 'session',
     group: 'Workspace & projects',
     args: '<list|resume|open|digest|note|next> [args]',
-    summary: 'Claude session lifecycle. session list [--cwd <path>] lists prior "<uuid>.jsonl" sessions in the CWD ({uuid, title, source, messageCount, modifiedAt}); session resume <tabId> <uuid> spawns "claude --resume <uuid>" in the named tab\'s PTY; session open <uuid> [--cwd <path>] [--force] is the Home click contract — focuses the session\'s live tab if open, else spawns "claude --resume <uuid>" in a new tab in the primary window (--cwd required to resume; a session live OUTSIDE Duo is refused unless --force, which FORKS via --fork-session). ENH-231 Async Catch-Up: session digest <tab> [--you-asked-only] materializes the tab\'s pre-hydration digest (the Stop-hook ping; --you-asked-only refreshes only "You asked"); session note|next <tab> ["<text>"] reads (no text) or writes the agent\'s self-narrated status / next-step recommendation, stamped by session uuid so it survives the tab closing (call these at natural stopping points — they fill the catch-up card\'s narrative).'
+    summary: 'Claude session lifecycle. session list [--cwd <path>] lists prior "<uuid>.jsonl" sessions in the CWD ({uuid, title, source, messageCount, modifiedAt}); session resume <tabId> <uuid> spawns "claude --resume <uuid>" in the named tab\'s PTY; session open <uuid> [--cwd <path>] [--force] is the Home click contract; focuses the session\'s live tab if open, else spawns "claude --resume <uuid>" in a new tab in the primary window (--cwd required to resume; a session live OUTSIDE Duo is refused unless --force, which FORKS via --fork-session). ENH-231 Async Catch-Up: session digest <tab> [--you-asked-only] materializes the tab\'s pre-hydration digest (the Stop-hook ping; --you-asked-only refreshes only "You asked"); session current [<tab>] returns the session the tab is recorded as running ({sessionId, source: launch|hook, boundAt} or null; Winduo ENH-268); session bind <tab> <session-id> records it by hand (Duo records it itself at launch and from its hooks); session note|next <tab> ["<text>"] reads (no text) or writes the agent\'s self-narrated status / next-step recommendation, stamped by session uuid so it survives the tab closing (call these at natural stopping points; they fill the catch-up card\'s narrative).'
   },
   {
     name: 'home',
@@ -2654,7 +2654,7 @@ async function main(): Promise<void> {
         //   duo session resume <tabId> <uuid>
         const sub = rest[0]
         if (!sub) {
-          die('Usage: duo session <list|resume|open> [args]')
+          die('Usage: duo session <list|resume|open|current|bind|digest|note|next> [args]')
         }
         if (sub === 'list') {
           const cwd = flagValue(rest, '--cwd')
@@ -2680,6 +2680,17 @@ async function main(): Promise<void> {
           if (cwd) payload.cwd = cwd
           if (force) payload.force = true
           out(await send('session', payload))
+        } else if (sub === 'current') {
+          // ENH-268 (Winduo): the session this tab is recorded as running.
+          const tabId = rest[1] ?? process.env.DUO_TAB
+          if (!tabId) die('Usage: duo session current [<tab>]   (defaults to $DUO_TAB)')
+          out(await send('session', { op: 'current', tabId }))
+        } else if (sub === 'bind') {
+          // ENH-268 (Winduo): record that a tab runs a given session.
+          const tabId = rest[1]
+          const sessionId = rest[2]
+          if (!tabId || !sessionId) die('Usage: duo session bind <tab> <session-id>')
+          out(await send('session', { op: 'bind', tabId, sessionId }))
         } else if (sub === 'digest') {
           // ENH-231 — materialize the tab's pre-hydration digest (the Stop-hook
           // ping; --you-asked-only refreshes only "You asked" for the new turn).
@@ -2863,11 +2874,16 @@ async function main(): Promise<void> {
         // hook can call `duo attention --state set` with no explicit id.
         const tab = flagValue(rest, '--tab') ?? process.env.DUO_TAB
         const state = flagValue(rest, '--state') ?? flagValue(rest, '--event')
-        if (!tab) die('Usage: duo attention --tab <id> --state set|clear   (--tab defaults to $DUO_TAB)')
+        if (!tab) die('Usage: duo attention --tab <id> --state set|clear [--session <id>]   (--tab defaults to $DUO_TAB)')
         if (state !== 'set' && state !== 'clear') {
           die('duo attention: --state must be set | clear')
         }
-        out(await send('attention', { tabId: tab, event: state }))
+        // ENH-268 (Winduo): the hook passes Claude Code's session_id so the
+        // tab's session binding follows /clear and /resume.
+        const attnSession = flagValue(rest, '--session')
+        const attnPayload: Record<string, unknown> = { tabId: tab, event: state }
+        if (attnSession) attnPayload.sessionId = attnSession
+        out(await send('attention', attnPayload))
         break
       }
 

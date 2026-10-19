@@ -187,7 +187,7 @@ const SUBCOMMANDS = {
   workspace: ['save', 'open', 'list-recent', 'current', 'new'],
   // ENH-212 (Home) — `duo session open <uuid>` is the Home click contract.
   // ENH-231 — digest|note|next (Stop-hook pre-hydration + agent self-narration).
-  session: ['list', 'resume', 'open', 'digest', 'note', 'next'],
+  session: ['list', 'resume', 'open', 'digest', 'note', 'next', 'current', 'bind'],
   project: ['list', 'focus', 'pin', 'unpin', 'close'],
   pack: ['list', 'uninstall'],
   packs: ['list'],

@@ -668,6 +668,10 @@ export interface ElectronTerminalAPI {
    *  (or last refresh). Used to decide between auto-typing `claude\n`
    *  and printing the install banner when a `kind: 'claude'` tab spawns. */
   claudeOnPath: () => Promise<boolean>
+  /** ENH-268 (Winduo): tell main which session id Duo launched a Claude tab
+   *  with (`claude --session-id <id>`), so the tab's session is known
+   *  instead of guessed. */
+  bindClaudeSession?: (tabId: string, sessionId: string) => void
   /** Stage 19c D27 — subscribe to `duo new-tab` requests from the CLI.
    *  Renderer adds the tab and replies via `replyNewTab`. */
   onNewTabRequest: (cb: (req: NewTabRequest) => void) => () => void
