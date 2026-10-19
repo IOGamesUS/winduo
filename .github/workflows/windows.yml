@@ -2,9 +2,10 @@
 # Runs on every push and pull request; the installer is attached to the run
 # as a downloadable artifact (Actions tab > the run > Artifacts).
 #
-# Releases: pushing a tag like v0.13.9 (matching package.json's version)
-# also publishes a GitHub Release on this repo with the installer and
-# latest.yml, which installed copies of Winduo check for updates.
+# Releases: a push to main whose package.json version has no GitHub Release
+# yet publishes one (tag v<version>, created by electron-builder) with the
+# installer and latest.yml, which installed copies of Winduo check for
+# updates. So releasing = bump the version, merge to main.
 name: Windows build
 
 on:
@@ -47,12 +48,25 @@ jobs:
       - name: Tests
         run: npx vitest run
 
+      - name: Is this a new release?
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && ! gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build the Windows installer
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ steps.release.outputs.publish != 'true' }}
         run: npm run dist:win
 
       - name: Build and publish the release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ steps.release.outputs.publish == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/dist.sh --win --x64 --publish always
